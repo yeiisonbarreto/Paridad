@@ -1,0 +1,43 @@
+{% extends "base.html" %}
+{% from "macros.html" import csrf %}
+{% block title %}{{ submission.filename }} · Paridad{% endblock %}
+{% block content %}
+<div class="page-heading">
+  <a href="/admin/reports">Volver a informes</a>
+  <h1>{{ submission.filename }}</h1>
+  <p>{{ submission.display_name }} ({{ submission.username }}) · {{ submission.code }} · {{ submission.language }}</p>
+</div>
+<section class="card">
+  <h2>Resultado del análisis</h2>
+  {% if submission.state == 'completed' %}
+    <p>Similitud máxima {{ submission.max_similarity_bp|percent }} · Umbral {{ submission.similarity_threshold }} %</p>
+    <p>Indicio de IA {{ submission.ai_bp|percent }} · Umbral {{ submission.ai_threshold }} %
+      {% if submission.ai_credit %}<span class="tag">Declarada</span>
+      {% elif submission.ai_bp > 100 * submission.ai_threshold %}<span class="tag alert">Posible uso sin declarar</span>{% endif %}
+    </p>
+    <p class="muted">El puntaje resume señales de estilo y estructura. Su interpretación requiere revisión académica.</p>
+    {% if submission.ai_credit %}<p><strong>Crédito declarado</strong> {{ submission.ai_credit }}</p>{% endif %}
+    <div class="table-wrap" tabindex="0" role="region" aria-label="Métricas del indicio de IA">
+    <table>
+      <thead><tr><th scope="col">Señal</th><th scope="col">Valor observado</th><th scope="col">Puntos</th></tr></thead>
+      <tbody>{% for feature in submission.ai_features.features %}
+        <tr><td>{{ feature.name }}</td><td>{{ feature.observed }}</td><td>{{ feature.points }}</td></tr>
+      {% endfor %}</tbody>
+    </table>
+    </div>
+    <p class="muted">{{ submission.ai_features.code_lines }} líneas · {{ submission.ai_features.tokens }} tokens · factor de muestra {{ submission.ai_features.sample_factor }} · {{ submission.analysis_version }}</p>
+  {% elif submission.state == 'pending' %}<p class="tag pending">En análisis</p>
+  {% else %}
+    <p class="tag alert">Análisis fallido</p>
+    <form action="/admin/submissions/{{ submission.id }}/retry" method="post">
+      {{ csrf(user) }}
+      <button class="button" type="submit">Reintentar análisis</button>
+    </form>
+  {% endif %}
+  <p><a class="button secondary" href="{{ draft }}">Preparar aviso en el correo</a></p>
+</section>
+<section class="card section-gap">
+  <h2>Código de la entrega</h2>
+  <pre tabindex="0"><code>{{ submission.source }}</code></pre>
+</section>
+{% endblock %}

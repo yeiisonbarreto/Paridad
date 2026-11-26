@@ -1,0 +1,26 @@
+{% macro csrf(user) %}
+  <input type="hidden" name="csrf" value="{{ user.csrf }}">
+{% endmacro %}
+
+{% macro thresholds(sim='', ai='', required=false) %}
+  <div class="field-pair">
+    <label>Umbral de similitud (%)
+      <input type="number" inputmode="numeric" name="similarity_threshold" min="0" max="100"
+             value="{{ sim if sim is not none else '' }}"{% if required %} required{% else %} placeholder="Global"{% endif %}>
+    </label>
+    <label>Umbral de indicio de IA (%)
+      <input type="number" inputmode="numeric" name="ai_threshold" min="0" max="100"
+             value="{{ ai if ai is not none else '' }}"{% if required %} required{% else %} placeholder="Global"{% endif %}>
+    </label>
+  </div>
+{% endmacro %}
+
+{% macro pagination(path, page, has_next, params='') %}
+  {% if page > 1 or has_next %}
+  <nav class="pagination" aria-label="Paginación">
+    {% if page > 1 %}<a href="{{ path }}?page={{ page - 1 }}{{ params }}">Anterior</a>{% endif %}
+    <span>Página {{ page }}</span>
+    {% if has_next %}<a href="{{ path }}?page={{ page + 1 }}{{ params }}">Siguiente</a>{% endif %}
+  </nav>
+  {% endif %}
+{% endmacro %}

@@ -1,0 +1,76 @@
+{% extends "base.html" %}
+{% from "macros.html" import csrf, pagination %}
+{% block title %}Mis entregas · Paridad{% endblock %}
+{% block head %}<script src="/static/student.min.js" defer></script>{% endblock %}
+{% block content %}
+<div class="page-heading">
+  <h1>Mis entregas</h1>
+  <p>{{ user.display_name }}</p>
+</div>
+<div class="student-layout">
+  <section class="card">
+    <h2>Subir archivo</h2>
+    {% if activities %}
+    <form action="/student/submissions" method="post" enctype="multipart/form-data" class="stack" id="submission-form">
+      {{ csrf(user) }}
+      <input type="hidden" name="request_id" value="{{ request_id }}">
+      <label>Actividad
+        <select name="activity_id" required id="activity">
+          <option value="">Selecciona la actividad</option>
+          {% for id, name in activities.items() %}<option value="{{ id }}">{{ name }}</option>{% endfor %}
+        </select>
+      </label>
+      <label>Lenguaje
+        <select name="language_id" required id="language">
+          <option value="">Selecciona el lenguaje</option>
+          {% for id, language in languages.items() %}
+          <option value="{{ id }}" data-activities="{{ language.activities|join(' ') }}"
+                  data-extensions="{{ language.extensions }}">{{ language.name }} ({{ language.extensions }})</option>
+          {% endfor %}
+        </select>
+      </label>
+      <label>Archivo de código
+        <input type="file" name="file" id="source" required aria-describedby="file-help">
+      </label>
+      <p class="field-help" id="file-help">Texto UTF-8 de hasta 128 KiB y 8000 tokens.</p>
+      <label class="check"><input type="checkbox" name="ai_declared" id="ai-declared" value="true"> Usé una herramienta de IA</label>
+      <label>Crédito de IA
+        <textarea name="ai_credit" id="ai-credit" maxlength="1000" rows="3" placeholder="Herramienta y tipo de ayuda"></textarea>
+      </label>
+      <button type="submit" class="button">Enviar a análisis</button>
+    </form>
+    {% else %}<p class="muted">En este momento no hay actividades abiertas.</p>{% endif %}
+  </section>
+  <section class="card history" aria-labelledby="history-heading">
+    <h2 id="history-heading">Historial</h2>
+    <p class="muted">La similitud puede actualizarse cuando se analizan nuevas entregas. El indicio de IA es orientativo.</p>
+    <div id="own-history"{% if deterrence %} class="deterrence" data-deterrence{% endif %}>
+      {% if results %}
+      <div class="table-wrap" tabindex="0" role="region" aria-label="Resultados de mis entregas">
+        <table>
+          <thead><tr><th scope="col">Archivo</th><th scope="col">Similitud máxima</th><th scope="col">Indicio de IA</th></tr></thead>
+          <tbody>
+          {% for result in results %}
+          <tr>
+            <td><strong>{{ result.filename }}</strong><span class="table-detail">{{ result.activity }} · {{ result.language }}</span>
+              <time class="table-detail">{{ result.submitted_at|date_label }}</time>
+            </td>
+            {% if result.state == 'completed' %}
+              <td>{{ result.similarity_bp|percent }}{% if result.similarity_alert %}<span class="tag alert">Revisión</span>{% endif %}</td>
+              <td>{{ result.ai_bp|percent }}
+                {% if result.ai_declared %}<span class="tag">Declarada</span>{% endif %}
+                {% if result.ai_alert %}<span class="tag alert">Revisión</span>{% endif %}
+              </td>
+            {% elif result.state == 'pending' %}<td colspan="2"><span class="tag pending">En análisis</span></td>
+            {% else %}<td colspan="2"><span class="tag alert">Análisis fallido</span></td>{% endif %}
+          </tr>
+          {% endfor %}
+          </tbody>
+        </table>
+      </div>
+      {% else %}<p class="empty">Aún no tienes archivos en esta página del historial.</p>{% endif %}
+    </div>
+    {{ pagination('/student', page, has_next) }}
+  </section>
+</div>
+{% endblock %}

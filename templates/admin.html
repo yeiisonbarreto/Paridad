@@ -1,0 +1,21 @@
+{% extends "base.html" %}
+{% from "macros.html" import csrf, thresholds %}
+{% block title %}Panel · Paridad{% endblock %}
+{% block content %}
+<div class="page-heading"><h1>Panel de administración</h1><p>{{ user.display_name }}</p></div>
+<div class="stats">
+  <a class="card stat" href="/admin/accounts"><strong>{{ totals.students }}</strong><span>Cuentas de estudiantes</span></a>
+  <a class="card stat" href="/admin/activities"><strong>{{ totals.activities }}</strong><span>Actividades abiertas</span></a>
+  <a class="card stat" href="/admin/reports"><strong>{{ totals.pending }}</strong><span>Entregas en análisis</span></a>
+  <a class="card stat" href="/admin/reports"><strong>{{ totals.failed }}</strong><span>Análisis fallidos</span></a>
+</div>
+<section class="card narrow">
+  <h2>Umbrales globales</h2>
+  <p class="muted">La alerta aparece cuando el resultado supera el umbral efectivo. Una actividad puede definir sus propios umbrales.</p>
+  <form action="/admin/settings" method="post" class="stack">
+    {{ csrf(user) }}
+    {{ thresholds(settings.similarity_threshold, settings.ai_threshold, true) }}
+    <button type="submit" class="button">Guardar umbrales</button>
+  </form>
+</section>
+{% endblock %}

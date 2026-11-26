@@ -1,0 +1,37 @@
+{% extends "base.html" %}
+{% from "macros.html" import csrf, pagination %}
+{% block title %}Cuentas · Paridad{% endblock %}
+{% block content %}
+<div class="page-heading"><h1>Cuentas de estudiantes</h1></div>
+<div class="student-layout">
+  <section class="card">
+    <h2>Crear cuenta</h2>
+    <form action="/admin/accounts" method="post" class="stack">
+      {{ csrf(user) }}
+      <label>Usuario<input name="username" maxlength="64" minlength="3" required autocomplete="off"></label>
+      <label>Nombre completo<input name="display_name" maxlength="120" required></label>
+      <label>Contraseña asignada<input type="password" name="password" minlength="12" maxlength="128" required autocomplete="new-password"></label>
+      <button type="submit" class="button">Crear estudiante</button>
+    </form>
+  </section>
+  <section class="card">
+    <h2>Gestionar cuentas</h2>
+    <p class="muted">Desactivar una cuenta o restablecer su contraseña cierra sus sesiones abiertas.</p>
+    {% for student in students %}
+    <details>
+      <summary>{{ student.display_name }} <span class="muted">· {{ student.username }}</span>
+        {% if not student.active %}<span class="tag alert">Inactiva</span>{% endif %}
+      </summary>
+      <form action="/admin/accounts/{{ student.id }}" method="post" class="stack record-form">
+        {{ csrf(user) }}
+        <label>Nombre completo<input name="display_name" value="{{ student.display_name }}" maxlength="120" required></label>
+        <label>Nueva contraseña<input type="password" name="new_password" minlength="12" maxlength="128" autocomplete="new-password"></label>
+        <label class="check"><input type="checkbox" name="active" value="true" {% if student.active %}checked{% endif %}> Cuenta activa</label>
+        <button type="submit" class="button">Guardar cuenta</button>
+      </form>
+    </details>
+    {% else %}<p class="empty">No hay cuentas de estudiantes en esta página.</p>{% endfor %}
+    {{ pagination('/admin/accounts', page, has_next) }}
+  </section>
+</div>
+{% endblock %}

@@ -1,0 +1,21 @@
+{% extends "base.html" %}
+{% block title %}Iniciar sesión · Paridad{% endblock %}
+{% block content %}
+<div class="login-layout">
+  <section class="login-intro" aria-labelledby="login-intro">
+    <h1 id="login-intro">Revisión de entregas de código</h1>
+    <p>Envía tus archivos de laboratorio y consulta el estado de cada entrega.</p>
+  </section>
+  <section class="card">
+    <h2>Iniciar sesión</h2>
+    <p class="muted">Usa la cuenta asignada por la universidad.</p>
+    {% if error %}<p class="callout alert" role="alert">{{ error }}</p>{% endif %}
+    <form action="/login" method="post" class="stack">
+      <input type="hidden" name="csrf" value="{{ csrf }}">
+      <label>Usuario<input name="username" autocomplete="username" maxlength="64" required autofocus></label>
+      <label>Contraseña<input type="password" name="password" autocomplete="current-password" maxlength="128" required></label>
+      <button type="submit" class="button">Ingresar</button>
+    </form>
+  </section>
+</div>
+{% endblock %}

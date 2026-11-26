@@ -1,0 +1,224 @@
+"""Verify the deployed app against an isolated Compose project."""
+
+import getpass
+import os
+import re
+import secrets
+import ssl
+import time
+from concurrent.futures import ThreadPoolExecutor
+from contextlib import ExitStack
+from uuid import uuid4
+
+import httpx
+
+BASE = os.getenv("PARIDAD_TEST_URL", "http://localhost:8787").rstrip("/")
+CSRF = re.compile(r'name="csrf" value="([^"]+)"')
+PAIR_LINK = re.compile(r'href="(/admin/reports/[a-f0-9-]+/[a-f0-9-]+)"')
+SUBMISSION_LINK = re.compile(r'href="(/admin/submissions/[a-f0-9-]+)"')
+MOODLE_ORIGIN = os.getenv("PARIDAD_TEST_MOODLE_ORIGIN", "")
+STYLE_CODE = """/* <b>marca de formato</b> */
+int process_value(int initial_value) {
+""" + """ // Step: check the current value before moving to the next example.
+ if (initial_value > 0) initial_value--;
+""" * 12 + """ return initial_value;
+}
+"""
+RENAMED_CODE = STYLE_CODE.replace("process_value", "normalize_value").replace("initial_value", "sample_value")
+
+
+def assert_status(response, status=200):
+    assert response.status_code == status, (response.request.method, response.request.url, response.status_code)
+    return response
+
+
+def csrf(client, page):
+    match = CSRF.search(assert_status(client.get(page)).text)
+    assert match, page
+    return match[1]
+
+
+def login(client, username, password):
+    response = assert_status(client.post("/login", data={
+        "username": username, "password": password, "csrf": csrf(client, "/login"),
+    }), 303)
+    if BASE.startswith("https://"):
+        session = next(item.lower() for item in response.headers.get_list("set-cookie")
+                       if item.startswith("__Host-paridad="))
+        assert "secure" in session and "httponly" in session
+        assert f"samesite={'none' if MOODLE_ORIGIN else 'lax'}" in session
+    return response.headers["location"]
+
+
+def post(client, path, token, status=303, **data):
+    return assert_status(client.post(path, data={"csrf": token, **data}), status)
+
+
+def upload(client, token, activity, language, filename, content, *, request_id=None, credit="", status=303):
+    fields = {"activity_id": activity, "language_id": language, "csrf": token,
+              "request_id": request_id or str(uuid4())}
+    if credit:
+        fields.update({"ai_declared": "true", "ai_credit": credit})
+    return assert_status(client.post(
+        "/student/submissions", data=fields, files={"file": (filename, content, "text/plain")},
+    ), status)
+
+
+def history(client):
+    rows = assert_status(client.get("/api/student/submissions")).json()
+    keys = {"filename", "activity", "language", "submitted_at", "state", "similarity_bp",
+            "similarity_alert", "ai_bp", "ai_alert", "ai_declared"}
+    assert all(set(row) == keys for row in rows)
+    return rows
+
+
+def wait_result(client, filename, minimum_bp=0):
+    deadline = time.monotonic() + 35
+    while time.monotonic() < deadline:
+        row = next((value for value in history(client) if value["filename"] == filename), None)
+        if row and row["state"] == "failed":
+            raise AssertionError(f"Falló el análisis de {filename}")
+        if row and row["state"] == "completed" and row["similarity_bp"] >= minimum_bp:
+            return row
+        time.sleep(0.4)
+    raise AssertionError(f"Resultado pendiente para {filename}, mínimo {minimum_bp}")
+
+
+def main():
+    username = os.getenv("PARIDAD_TEST_ADMIN", "docente")
+    password = os.getenv("PARIDAD_TEST_PASSWORD") or getpass.getpass("Contraseña de la cuenta de prueba: ")
+    student_pw = secrets.token_urlsafe(18)
+    suffix = secrets.token_hex(4)
+    first_name, second_name = f"ana_{suffix}", f"bruno_{suffix}"
+    lab, separate_lab, concurrent_lab = f"lab_{suffix}", f"otro_{suffix}", f"par_{suffix}"
+    language_code = f"texto_{suffix}"
+    ca_file = os.getenv("PARIDAD_TEST_CA_FILE")
+    verify = ssl.create_default_context(cafile=ca_file) if ca_file else True
+
+    with ExitStack() as stack:
+        def client():
+            return stack.enter_context(httpx.Client(
+                base_url=BASE, headers={"Origin": BASE}, timeout=15, verify=verify, trust_env=False,
+            ))
+
+        admin, first, second, guest = client(), client(), client(), client()
+        assert_status(guest.get("/healthz"))
+        assert_status(guest.get("/api/student/submissions"), 401)
+        assert_status(guest.get("/admin/reports"), 303)
+        assert login(admin, username, password) == "/admin"
+        admin_csrf = csrf(admin, "/admin")
+        assert_status(admin.get("/api/student/submissions"), 403)
+        if BASE.startswith("https://"):
+            assert "max-age=" in assert_status(admin.get("/admin")).headers["strict-transport-security"]
+        assert "frame-ancestors 'none'" in assert_status(admin.get("/admin")).headers["content-security-policy"]
+        assert "no-store" in assert_status(admin.get("/admin")).headers["cache-control"]
+
+        for account in (first_name, second_name):
+            post(admin, "/admin/accounts", admin_csrf, username=account, display_name=account, password=student_pw)
+        post(admin, "/admin/languages", admin_csrf, code=language_code, name=language_code,
+             extensions=".txt", comments="c", keywords="int return if")
+        activities_page = assert_status(admin.get("/admin/activities")).text
+        c_id = re.search(r'name="language_ids" value="([0-9]+)"\s*> C</label>', activities_page)[1]
+        custom_id = re.search(r'name="language_ids" value="([0-9]+)"\s*> ' + language_code + "</label>", activities_page)[1]
+        post(admin, "/admin/activities", admin_csrf, code=lab, title="Laboratorio común", language_ids=[c_id, custom_id])
+        post(admin, "/admin/activities", admin_csrf, code=separate_lab, title="Laboratorio aparte", language_ids=c_id)
+        post(admin, "/admin/activities", admin_csrf, code=concurrent_lab, title="Laboratorio concurrente", language_ids=c_id)
+        post(admin, "/admin/settings", admin_csrf, similarity_threshold=40, ai_threshold=30)
+
+        assert login(first, first_name, student_pw) == "/student"
+        assert login(second, second_name, student_pw) == "/student"
+        first_csrf, second_csrf = csrf(first, "/student"), csrf(second, "/student")
+        student_response = assert_status(first.get("/student"))
+        expected_ancestors = MOODLE_ORIGIN or "'none'"
+        assert f"frame-ancestors {expected_ancestors}" in student_response.headers["content-security-policy"]
+        assert_status(first.get("/static/student.min.js"))
+        assert_status(first.get("/static/paridad.css"))
+        assert_status(first.get("/admin/accounts"), 403)
+        post(first, "/admin/settings", first_csrf, 403, similarity_threshold=1, ai_threshold=1)
+        post(admin, "/admin/settings", "token-inválido", 403, similarity_threshold=1, ai_threshold=1)
+        assert_status(admin.post("/admin/settings", headers={"Origin": "https://invalid.example"},
+                                 data={"csrf": admin_csrf, "similarity_threshold": 1, "ai_threshold": 1}), 403)
+
+        activity_id = re.search(r'<option value="(\d+)">' + lab + " ·", student_response.text)[1]
+        separate_id = re.search(r'<option value="(\d+)">' + separate_lab + " ·", student_response.text)[1]
+        nonce = str(uuid4())
+        upload(first, first_csrf, activity_id, c_id, "primero.c", STYLE_CODE, request_id=nonce)
+        row = wait_result(first, "primero.c")
+        assert row["similarity_bp"] == 0 and not row["similarity_alert"]
+        assert row["ai_bp"] > 3000 and row["ai_alert"]
+        upload(first, first_csrf, activity_id, c_id, "primero.c", STYLE_CODE, request_id=nonce)
+        upload(first, first_csrf, activity_id, c_id, "mismo-estudiante.c", STYLE_CODE)
+        assert wait_result(first, "mismo-estudiante.c")["similarity_bp"] == 0
+        assert len(history(first)) == 2
+        assert history(second) == []
+
+        with ThreadPoolExecutor(max_workers=2) as executor:
+            tasks = [
+                executor.submit(upload, first, first_csrf, activity_id, custom_id, "otro-lenguaje.txt", STYLE_CODE),
+                executor.submit(upload, second, second_csrf, separate_id, c_id, "otra-actividad.c", RENAMED_CODE),
+            ]
+            for task in tasks:
+                task.result()
+        assert wait_result(first, "otro-lenguaje.txt")["similarity_bp"] == 0
+        assert wait_result(second, "otra-actividad.c")["similarity_bp"] == 0
+        assert wait_result(first, "primero.c")["similarity_bp"] == 0
+
+        upload(second, second_csrf, activity_id, c_id, "compania.c", RENAMED_CODE, credit="Herramienta de ejemplo")
+        second_row = wait_result(second, "compania.c", 10000)
+        assert second_row["similarity_alert"] and second_row["ai_declared"] and not second_row["ai_alert"]
+        assert wait_result(first, "primero.c", 10000)["similarity_alert"]
+        own_page = assert_status(first.get("/student")).text
+        assert "100,00 %" in own_page and second_name not in own_page and "compania.c" not in own_page
+        assert [row["filename"] for row in history(second)] == ["compania.c", "otra-actividad.c"]
+
+        reports = assert_status(admin.get("/admin/reports", params={"activity_id": activity_id, "language_id": c_id})).text
+        pair_links = PAIR_LINK.findall(reports)
+        assert len(pair_links) == 2 and first_name in reports and second_name in reports
+        detail = assert_status(admin.get(pair_links[0])).text
+        assert "Fragmentos coincidentes" in detail and "líneas " in detail and "100,00 %" in detail
+        assert_status(first.get(pair_links[0]), 403)
+        for link in SUBMISSION_LINK.findall(reports):
+            detail = assert_status(admin.get(link)).text
+            assert "Comentarios explicativos" in detail and "mailto:" in detail
+            assert "<b>marca de formato</b>" not in detail and "&lt;b&gt;marca de formato&lt;/b&gt;" in detail
+            assert_status(second.get(link), 403)
+        assert_status(admin.get("/admin/reports?activity_id=&language_id="))
+
+        concurrent_id = re.search(r'<option value="(\d+)">' + concurrent_lab + " ·", student_response.text)[1]
+        with ThreadPoolExecutor(max_workers=2) as executor:
+            tasks = [
+                executor.submit(upload, first, first_csrf, concurrent_id, c_id, "par-uno.c", STYLE_CODE),
+                executor.submit(upload, second, second_csrf, concurrent_id, c_id, "par-dos.c", RENAMED_CODE),
+            ]
+            for task in tasks:
+                task.result()
+        assert wait_result(first, "par-uno.c", 10000)["similarity_alert"]
+        assert wait_result(second, "par-dos.c", 10000)["similarity_alert"]
+        concurrent_report = admin.get("/admin/reports", params={"activity_id": concurrent_id, "language_id": c_id})
+        assert len(PAIR_LINK.findall(assert_status(concurrent_report).text)) == 1
+
+        post(admin, "/admin/settings", admin_csrf, similarity_threshold=100, ai_threshold=30)
+        assert not wait_result(first, "primero.c", 10000)["similarity_alert"]
+        post(admin, f"/admin/activities/{activity_id}", admin_csrf, language_ids=[c_id, custom_id],
+             title="Laboratorio común", is_open="true", similarity_threshold=40)
+        assert wait_result(first, "primero.c", 10000)["similarity_alert"]
+        post(admin, "/admin/settings", admin_csrf, similarity_threshold=40, ai_threshold=30)
+
+        upload(first, first_csrf, activity_id, c_id, "otro.exe", STYLE_CODE, status=400)
+        upload(first, first_csrf, separate_id, custom_id, "deshabilitado.txt", STYLE_CODE, status=400)
+        upload(first, first_csrf, activity_id, c_id, "binario.c", b"\x00\xff", status=400)
+        upload(first, first_csrf, activity_id, c_id, "grande.c", b"x" * (128 * 1024 + 1), status=413)
+        upload(first, first_csrf, activity_id, c_id, "largo.c", b"x" * (145 * 1024), status=413)
+
+        account_page = assert_status(admin.get("/admin/accounts")).text
+        account_id = re.search(r'<summary>' + second_name + r'.*?</summary>\s*'
+                               r'<form action="/admin/accounts/(\d+)"', account_page, re.S)[1]
+        post(admin, f"/admin/accounts/{account_id}", admin_csrf, display_name=second_name,
+             active="true", new_password=secrets.token_urlsafe(18))
+        assert_status(second.get("/api/student/submissions"), 401)
+
+    print("Flujo HTTP verificado: autorización, recálculo, ámbitos, fragmentos, crédito, límites y sesiones.")
+
+
+if __name__ == "__main__":
+    main()

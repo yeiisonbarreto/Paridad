@@ -1,0 +1,67 @@
+{% extends "base.html" %}
+{% from "macros.html" import pagination %}
+{% block title %}Informes · Paridad{% endblock %}
+{% block content %}
+<div class="page-heading"><h1>Informes</h1><p>Revisa coincidencias de código e indicios de IA por actividad y lenguaje.</p></div>
+<section class="card">
+  <form class="filters" action="/admin/reports" method="get">
+    <label>Actividad
+      <select name="activity_id">
+        <option value="">Todas</option>
+        {% for activity in labs %}<option value="{{ activity.id }}" {% if activity.id == selected_activity %}selected{% endif %}>{{ activity.code }} · {{ activity.title }}</option>{% endfor %}
+      </select>
+    </label>
+    <label>Lenguaje
+      <select name="language_id">
+        <option value="">Todos</option>
+        {% for item in languages %}<option value="{{ item.id }}" {% if item.id == selected_language %}selected{% endif %}>{{ item.name }}</option>{% endfor %}
+      </select>
+    </label>
+    <label class="check"><input name="alerts_only" type="checkbox" value="true" {% if alerts_only %}checked{% endif %}> Solo alertas</label>
+    <button class="button" type="submit">Filtrar</button>
+  </form>
+</section>
+<section class="card section-gap">
+  <h2>Comparaciones entre estudiantes</h2>
+  {% if pairs %}
+  <div class="table-wrap" tabindex="0" role="region" aria-label="Comparaciones">
+  <table>
+    <thead><tr><th scope="col">Estudiantes</th><th scope="col">Actividad y lenguaje</th><th scope="col">Similitud</th><th scope="col">Evidencia</th></tr></thead>
+    <tbody>{% for pair in pairs %}
+    <tr>
+      <td>{{ pair.left_name }} ({{ pair.left_username }})<br>{{ pair.right_name }} ({{ pair.right_username }})</td>
+      <td>{{ pair.code }}<span class="table-detail">{{ pair.language }}</span></td>
+      <td>{{ pair.score_bp|percent }}{% if pair.alert %}<span class="tag alert">Revisión</span>{% endif %}</td>
+      <td><a href="/admin/reports/{{ pair.left_id }}/{{ pair.right_id }}">Ver fragmentos</a></td>
+    </tr>
+    {% endfor %}</tbody>
+  </table>
+  </div>
+  {% else %}<p class="empty">Sin comparaciones para estos filtros.</p>{% endif %}
+</section>
+<section class="card section-gap">
+  <h2>Entregas e indicios de IA</h2>
+  {% if submissions %}
+  <div class="table-wrap" tabindex="0" role="region" aria-label="Entregas">
+  <table>
+    <thead><tr><th scope="col">Archivo</th><th scope="col">Estudiante</th><th scope="col">Actividad y lenguaje</th><th scope="col">Indicio de IA</th></tr></thead>
+    <tbody>{% for item in submissions %}
+    <tr>
+      <td><a href="/admin/submissions/{{ item.id }}">{{ item.filename }}</a></td>
+      <td>{{ item.display_name }} ({{ item.username }})</td>
+      <td>{{ item.code }}<span class="table-detail">{{ item.language }}</span></td>
+      <td>
+        {% if item.state == 'completed' %}{{ item.ai_bp|percent }}
+          {% if item.declared %}<span class="tag">Declarada</span>{% endif %}
+          {% if item.alert %}<span class="tag alert">Revisión</span>{% endif %}
+        {% elif item.state == 'pending' %}<span class="tag pending">En análisis</span>
+        {% else %}<span class="tag alert">Análisis fallido</span>{% endif %}
+      </td>
+    </tr>
+    {% endfor %}</tbody>
+  </table>
+  </div>
+  {% else %}<p class="empty">Sin entregas para estos filtros.</p>{% endif %}
+  {{ pagination('/admin/reports', page, has_next, ('&activity_id=' ~ selected_activity if selected_activity else '') ~ ('&language_id=' ~ selected_language if selected_language else '') ~ ('&alerts_only=true' if alerts_only else '')) }}
+</section>
+{% endblock %}

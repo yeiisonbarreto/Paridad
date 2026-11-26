@@ -1,0 +1,11 @@
+*
+!requirements.txt
+!paridad/
+!paridad/*.py
+!migrations/
+!migrations/*.sql
+!templates/
+!templates/*.html
+!static/
+!static/*.css
+!static/*.min.js

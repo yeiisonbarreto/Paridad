@@ -1,0 +1,63 @@
+{% extends "base.html" %}
+{% from "macros.html" import csrf, thresholds %}
+{% macro language_choices(selected=[]) %}
+  <fieldset>
+    <legend>Lenguajes permitidos</legend>
+    {% for language in languages %}
+    <label class="check"><input type="checkbox" name="language_ids" value="{{ language.id }}"
+      {% if language.id in selected %}checked{% endif %}> {{ language.name }}</label>
+    {% endfor %}
+  </fieldset>
+{% endmacro %}
+{% block title %}Actividades · Paridad{% endblock %}
+{% block content %}
+<div class="page-heading"><h1>Actividades y lenguajes</h1></div>
+<div class="grid-two">
+  <section class="card">
+    <h2>Crear actividad</h2>
+    <form action="/admin/activities" method="post" class="stack">
+      {{ csrf(user) }}
+      <div class="field-pair">
+        <label>Código<input name="code" placeholder="lab01" maxlength="32" required></label>
+        <label>Título<input name="title" maxlength="120" required></label>
+      </div>
+      {{ language_choices() }}
+      {{ thresholds() }}
+      <button type="submit" class="button">Crear actividad</button>
+    </form>
+  </section>
+  <section class="card">
+    <h2>Agregar lenguaje</h2>
+    <form action="/admin/languages" method="post" class="stack">
+      {{ csrf(user) }}
+      <div class="field-pair">
+        <label>Código<input name="code" maxlength="32" required></label>
+        <label>Nombre<input name="name" maxlength="80" required></label>
+      </div>
+      <label>Extensiones separadas por comas<input name="extensions" placeholder=".py, .pyw" maxlength="180" required></label>
+      <label>Estilo de comentarios
+        <select name="comments">{% for style, label in comment_styles.items() %}<option value="{{ style }}">{{ label }}</option>{% endfor %}</select>
+      </label>
+      <label>Palabras clave separadas por espacios<input name="keywords" placeholder="def return for if" maxlength="3000"></label>
+      <label class="check"><input type="checkbox" name="case_insensitive" value="true"> Ignorar mayúsculas e identificar símbolos por su forma en minúsculas</label>
+      <button type="submit" class="button">Agregar lenguaje</button>
+    </form>
+  </section>
+</div>
+<section class="card section-gap">
+  <h2>Actividades existentes</h2>
+  {% for activity in labs %}
+  <details>
+    <summary><strong>{{ activity.code }}</strong> · {{ activity.title }} <span class="tag">{{ 'Abierta' if activity.is_open else 'Cerrada' }}</span></summary>
+    <form action="/admin/activities/{{ activity.id }}" method="post" class="stack record-form">
+      {{ csrf(user) }}
+      <label>Título<input name="title" value="{{ activity.title }}" maxlength="120" required></label>
+      <label class="check"><input type="checkbox" name="is_open" value="true" {% if activity.is_open %}checked{% endif %}> Aceptar nuevas entregas</label>
+      {{ language_choices(activity.language_ids) }}
+      {{ thresholds(activity.similarity_threshold, activity.ai_threshold) }}
+      <button type="submit" class="button">Guardar actividad</button>
+    </form>
+  </details>
+  {% else %}<p class="empty">Aún no hay actividades.</p>{% endfor %}
+</section>
+{% endblock %}
