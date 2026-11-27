@@ -43,37 +43,27 @@
     </form>
     {% endif %}
     {% for student in students %}
-    <div class="selectable-record">
+    <div class="selectable-record" data-account-id="{{ student.id }}">
       <input type="checkbox" name="selection" value="{{ student.id }}" form="account-selection"
              data-bulk-item aria-label="Seleccionar {{ student.display_name }} ({{ student.username }})">
-    <details class="record-disclosure" name="student-records">
-      <summary>
-        <span class="record-summary-text">
-          <span>{{ student.display_name }}</span>
-          <small>{{ student.username }}</small>
-        </span>
+      <div class="record-row">
+        <span class="record-summary-text"><span>{{ student.display_name }}</span><small>{{ student.username }}</small></span>
         {% if not student.active %}<span class="tag alert">Inhabilitada</span>{% endif %}
-      </summary>
-      <form action="/admin/accounts/{{ student.id }}" method="post" class="stack record-form">
-        {{ csrf(user) }}
-        <input type="hidden" name="edit_email" value="true">
-        <label>Nombre completo<input name="display_name" value="{{ student.display_name }}" maxlength="120" required></label>
-        <label>Correo electrónico<input type="email" name="email" value="{{ student.email or '' }}" maxlength="254"></label>
-        <label>Nueva contraseña<input type="password" name="new_password" minlength="12" maxlength="128" autocomplete="new-password"></label>
-        <label class="check"><input type="checkbox" name="active" value="true" {% if student.active %}checked{% endif %}> Permitir iniciar sesión</label>
-        <p class="field-help">Inhabilitar o restablecer la contraseña cierra las sesiones abiertas.</p>
-        <button type="submit" class="button">Guardar cuenta</button>
-      </form>
-      <div class="account-actions">
-        {% if student.active %}
-        <form action="/admin/accounts/{{ student.id }}/invitacion" method="post">
-          {{ csrf(user) }}
-          <button type="submit" class="button secondary">Generar enlace de invitación</button>
-        </form>
-        {% endif %}
-        <a href="/admin/accounts/{{ student.id }}/eliminar" class="button secondary danger">Eliminar cuenta</a>
+        <details class="file-menu" data-dropdown>
+          <summary aria-label="Acciones de {{ student.display_name }}">Acciones</summary>
+          <div class="file-actions">
+            <a href="/admin/accounts/{{ student.id }}/editar" data-record-action>Modificar</a>
+            <a href="/admin/accounts/{{ student.id }}/estado" data-record-action>{{ 'Inhabilitar' if student.active else 'Reactivar' }}</a>
+            {% if student.active %}
+            <form action="/admin/accounts/{{ student.id }}/invitacion" method="post" data-record-action>
+              {{ csrf(user) }}
+              <button type="submit" class="file-action-button">Generar enlace de invitación</button>
+            </form>
+            {% endif %}
+            <a href="/admin/accounts/{{ student.id }}/eliminar" class="text-danger" data-record-action>Eliminar</a>
+          </div>
+        </details>
       </div>
-    </details>
     </div>
     {% else %}<p class="empty">No hay cuentas de estudiantes en esta página.</p>{% endfor %}
     {{ pagination('/admin/accounts', page, has_next) }}

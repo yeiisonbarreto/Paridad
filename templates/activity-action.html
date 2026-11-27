@@ -1,0 +1,28 @@
+{% extends "base.html" %}
+{% from "macros.html" import csrf %}
+{% from "activity-components.html" import activity_fields %}
+{% set closing = activity.is_open %}
+{% set title = "Modificar actividad" if operation == 'editar' else ("Eliminar actividad" if operation == 'eliminar' else ("Cerrar entregas" if closing else "Reabrir entregas")) %}
+{% block title %}{{ title }} · Paridad{% endblock %}
+{% block content %}
+<section class="card narrow stack" data-record-panel>
+  <h1>{{ title }}</h1>
+  <p class="muted">{{ activity.code|upper }} · {{ activity.title }}</p>
+  <form method="post" action="/admin/activities/{{ activity.id }}{% if operation != 'editar' %}/{{ operation }}{% endif %}" class="stack">
+    {{ csrf(user) }}
+    {% if operation == 'editar' %}
+      {{ activity_fields(modules, languages, time_zone, activity) }}
+    {% elif operation == 'estado' %}
+      <input name="is_open" type="hidden" value="{{ 'false' if closing else 'true' }}">
+      <p>{{ 'Los estudiantes dejarán de poder subir archivos a esta actividad.' if closing else 'Los estudiantes podrán enviar archivos dentro del plazo configurado.' }}</p>
+    {% else %}
+      <p>Se eliminará la actividad y todos sus archivos, comparaciones y aclaraciones.</p>
+      <p class="muted">{{ submission_count }} {{ 'archivo asociado' if submission_count == 1 else 'archivos asociados' }}.</p>
+    {% endif %}
+    <div class="notice-dialog-actions">
+      <a href="/admin/activities" class="button secondary" data-record-close>Cancelar</a>
+      <button type="submit" class="button{{ ' danger' if operation == 'eliminar' }}">{{ 'Guardar cambios' if operation == 'editar' else ('Eliminar definitivamente' if operation == 'eliminar' else title) }}</button>
+    </div>
+  </form>
+</section>
+{% endblock %}

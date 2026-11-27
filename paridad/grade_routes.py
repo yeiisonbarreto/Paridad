@@ -15,7 +15,7 @@ router = APIRouter()
 
 GRADE_SELECT = """
     SELECT s.id, s.filename, a.code AS activity, s.state, s.rubric, s.automatic_grade,
-           s.quality_points, s.grade_override, s.grade_note, c.reason, c.comments, c.grade_at_request,
+           s.quality_points, s.similarity_penalty, s.grade_override, s.grade_note, c.reason, c.comments, c.grade_at_request,
            c.status AS clarification_status, c.response, c.created_at, c.resolved_at, c.grade_at_resolution
     FROM submissions s JOIN activities a ON a.id = s.activity_id
     LEFT JOIN grade_clarifications c ON c.submission_id = s.id

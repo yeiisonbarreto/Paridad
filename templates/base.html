@@ -11,6 +11,7 @@
   {% if user and user.role in ['STUDENT', 'ADMIN'] %}
   <script src="/static/notices-ui.min.js" defer></script>
   {% endif %}
+  {% if user and user.role == 'ADMIN' %}<script src="/static/admin-actions.min.js" defer></script>{% endif %}
   {% if user and user.role == 'STUDENT' %}<script src="/static/student.min.js" defer></script>{% endif %}
   {% block head %}{% endblock %}
 </head>
@@ -72,6 +73,15 @@
   </header>
   {% endblock %}
   <main class="shell content" id="main">{% block content %}{% endblock %}</main>
+  {% if user and user.role == 'ADMIN' and (request.url.path.startswith('/admin/accounts') or request.url.path.startswith('/admin/activities')) %}
+  <dialog class="notice-dialog record-dialog" id="record-action-dialog" aria-label="Acción de administración">
+    <div class="notice-dialog-inner">
+      <p class="callout alert" data-record-error role="alert" hidden></p>
+      <p data-record-loading role="status" hidden>Cargando…</p>
+      <div data-record-content></div>
+    </div>
+  </dialog>
+  {% endif %}
   {% if user and user.role == 'ADMIN' and request.url.path in ['/admin/reports', '/admin/submissions'] %}
   <dialog class="notice-dialog" id="send-notice-dialog" aria-labelledby="send-notice-title">
     <form method="dialog" class="notice-dialog-inner stack">

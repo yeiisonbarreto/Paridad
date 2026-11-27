@@ -13,8 +13,8 @@
 {% block title %}Comparación · Paridad{% endblock %}
 {% block content %}
 <div class="page-heading">
-  {% if overview_id %}<a href="/admin/submissions/{{ overview_id }}?origen={{ origin }}#comparaciones">Volver a la entrega</a>
-  {% else %}<a href="/admin/reports#comparaciones">Volver a informes</a>{% endif %}
+  {% if overview_id %}<a class="button secondary back-button" href="/admin/submissions/{{ overview_id }}?origen={{ origin }}#comparaciones">Volver a la entrega</a>
+  {% else %}<a class="button secondary back-button" href="/admin/reports#comparaciones">Volver a informes</a>{% endif %}
   <h1>Fragmentos coincidentes</h1>
   <p>{{ pair.code }} · {{ pair.language }}</p>
 </div>

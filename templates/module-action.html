@@ -1,0 +1,32 @@
+{% extends "base.html" %}
+{% from "macros.html" import csrf %}
+{% block title %}Gestionar módulo · Paridad{% endblock %}
+{% block content %}
+<section class="card narrow stack" data-record-panel>
+  {% if operation == 'editar' %}
+  <h1>Modificar módulo</h1>
+  <form method="post" action="/admin/activities/modulos/{{ module.id }}/editar" class="stack">
+    {{ csrf(user) }}
+    <label>Código<input name="code" value="{{ module.code|upper }}" maxlength="32" required></label>
+    <label>Título<input name="title" value="{{ module.title }}" maxlength="120" required></label>
+    <div class="notice-dialog-actions">
+      <a href="/admin/activities" class="button secondary" data-record-close>Cancelar</a>
+      <button type="submit" class="button">Guardar cambios</button>
+    </div>
+  </form>
+  {% else %}
+  <h1>Eliminar módulo</h1>
+  <p>{{ module.code|upper }} · {{ module.title }}</p>
+  {% if has_deliveries %}
+  <p>Mueve o elimina las actividades del módulo antes de eliminarlo.</p>
+  <a href="/admin/activities" class="button secondary back-button" data-record-close>Volver a actividades</a>
+  {% else %}
+  <form method="post" action="/admin/activities/modulos/{{ module.id }}/eliminar" class="notice-dialog-actions">
+    {{ csrf(user) }}
+    <a href="/admin/activities" class="button secondary" data-record-close>Cancelar</a>
+    <button type="submit" class="button danger">Eliminar definitivamente</button>
+  </form>
+  {% endif %}
+  {% endif %}
+</section>
+{% endblock %}

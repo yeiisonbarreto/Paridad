@@ -532,3 +532,27 @@ code { font: 0.85rem/1.55 ui-monospace, "Cascadia Code", monospace; }
   box-shadow: var(--shadow-menu);
 }
 .file-menu .file-actions[popover]:not(:popover-open) { display: none; }
+
+.page-heading > .back-button, .back-button { display: inline-flex; align-items: center; gap: 0.45rem; }
+.back-button::before { content: "←" / ""; }
+.record-row { display: flex; align-items: center; gap: 0.6rem; padding-block: 0.7rem; }
+.record-row > .record-summary-text { min-width: 0; overflow-wrap: anywhere; margin: 0; }
+.record-row > .file-menu { flex: none; }
+.module-group + .module-group { border-top: 1px solid var(--line); margin-top: 0.65rem; }
+.delivery-list, .student-delivery-list { padding: 0; margin: 0; list-style: none; }
+.delivery-list { padding-inline-start: clamp(0.4rem, 2vw, 1rem); }
+.delivery-list > li { border-top: 1px solid var(--line); }
+.delivery-window { padding-block: 0.65rem; }
+.delivery-window .field-help { margin: 0; }
+.module-links { display: flex; flex-wrap: wrap; gap: 0.45rem; margin-bottom: 0.9rem; }
+.module-links a[aria-current="page"] { border-color: var(--brand); background: var(--brand-soft); color: var(--brand-dark); }
+.delivery-selection { margin-block: 0.7rem 1.1rem; }
+.student-delivery-list > li { border-block-start: 1px solid var(--line); padding-block: 0.58rem; }
+.student-delivery-list > li:last-child { border-block-end: 1px solid var(--line); }
+.student-delivery-list .record-row { padding: 0; }
+.delivery-countdown { display: block; color: var(--brand-dark); font-variant-numeric: tabular-nums; }
+.delivery-countdown:empty { display: none; }
+.record-dialog { width: min(36rem, 100% - 2rem); }
+.record-dialog [data-record-panel] { margin: 0; padding: 0; max-width: none; border: 0; box-shadow: none; }
+.record-dialog h1 { font-size: 1.4rem; margin: 0; }
+.record-dialog [data-record-error]:not([hidden]) { margin-block-end: 0.9rem; }

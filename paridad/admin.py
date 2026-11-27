@@ -62,7 +62,9 @@ def dashboard(request: Request):
         settings = conn.execute("SELECT * FROM settings WHERE id = 1").fetchone()
         totals = conn.execute(
             """SELECT (SELECT count(*) FROM users WHERE role = 'STUDENT') AS students,
-                      (SELECT count(*) FROM activities WHERE is_open) AS activities,
+                      (SELECT count(*) FROM activities WHERE is_open
+                          AND (opens_at IS NULL OR opens_at <= now())
+                          AND (closes_at IS NULL OR closes_at > now())) AS activities,
                       (SELECT count(*) FROM submissions WHERE state = 'pending') AS pending,
                       (SELECT count(*) FROM submissions WHERE state = 'failed') AS failed"""
         ).fetchone()
@@ -78,91 +80,6 @@ def settings(request: Request, csrf: Csrf, similarity_threshold: Threshold, ai_t
             (similarity_threshold, ai_threshold),
         )
     return redirect("/admin")
-
-
-@router.get("/activities")
-def activities(request: Request):
-    with request.app.state.pool.connection() as conn:
-        user = administrator(conn, request)
-        labs = conn.execute(
-            """SELECT a.*, ARRAY(SELECT language_id FROM activity_languages WHERE activity_id = a.id) AS language_ids
-               FROM activities a ORDER BY a.code"""
-        ).fetchall()
-        languages = conn.execute("SELECT * FROM languages ORDER BY name").fetchall()
-    return view(
-        request, "activities.html", user=user, labs=labs, languages=languages,
-        comment_styles={key: label for key, label in {
-            "none": "Sin comentarios", "c": "// y /* … */", "marie": "/", "arm": "//, @, ; y /* … */",
-            "vhdl": "--", "hash": "#", "semicolon": ";",
-        }.items() if key in COMMENT_STYLES},
-    )
-
-
-def update_languages(conn, activity_id: int, language_ids: list[int]) -> None:
-    if not language_ids or len(language_ids) > 32 or any(not 0 < value < 2**63 for value in language_ids):
-        raise HTTPException(400, "Selecciona entre 1 y 32 lenguajes válidos.")
-    ids = sorted(set(language_ids))
-    known = conn.execute("SELECT id FROM languages WHERE id = ANY(%s)", (ids,)).fetchall()
-    if len(known) != len(ids):
-        raise HTTPException(400, "Alguno de los lenguajes no existe.")
-    conn.execute(
-        "DELETE FROM activity_languages WHERE activity_id = %s AND NOT (language_id = ANY(%s))",
-        (activity_id, ids),
-    )
-    with conn.cursor() as cursor:
-        cursor.executemany(
-            "INSERT INTO activity_languages (activity_id, language_id) VALUES (%s, %s) ON CONFLICT DO NOTHING",
-            [(activity_id, language_id) for language_id in ids],
-        )
-
-
-@router.post("/activities")
-def create_activity(
-    request: Request, csrf: Csrf, code: Code, title: Name,
-    language_ids: Annotated[list[int], Form()],
-    similarity_threshold: Annotated[str, Form(max_length=3)] = "",
-    ai_threshold: Annotated[str, Form(max_length=3)] = "",
-):
-    try:
-        with request.app.state.pool.connection() as conn:
-            administrator(conn, request, csrf)
-            row = conn.execute(
-                """INSERT INTO activities (code, title, similarity_threshold, ai_threshold)
-                   VALUES (%s, %s, %s, %s) RETURNING id""",
-                (code_value(code), required_text(title),
-                 optional_threshold(similarity_threshold), optional_threshold(ai_threshold)),
-            ).fetchone()
-            update_languages(conn, row["id"], language_ids)
-    except errors.UniqueViolation:
-        raise HTTPException(409, "Ya existe una actividad con ese código.") from None
-    return redirect("/admin/activities")
-
-
-@router.post("/activities/{activity_id}")
-def update_activity(
-    request: Request, activity_id: int, csrf: Csrf, title: Name,
-    language_ids: Annotated[list[int], Form()],
-    is_open: Annotated[bool, Form()] = False,
-    similarity_threshold: Annotated[str, Form(max_length=3)] = "",
-    ai_threshold: Annotated[str, Form(max_length=3)] = "",
-):
-    try:
-        with request.app.state.pool.connection() as conn:
-            administrator(conn, request, csrf)
-            if not 0 < activity_id < 2**63:
-                raise HTTPException(404, "Actividad no encontrada.")
-            row = conn.execute(
-                """UPDATE activities SET title = %s, is_open = %s, similarity_threshold = %s, ai_threshold = %s
-                   WHERE id = %s RETURNING id""",
-                (required_text(title), is_open, optional_threshold(similarity_threshold),
-                 optional_threshold(ai_threshold), activity_id),
-            ).fetchone()
-            if not row:
-                raise HTTPException(404, "Actividad no encontrada.")
-            update_languages(conn, activity_id, language_ids)
-    except errors.ForeignKeyViolation:
-        raise HTTPException(409, "Ese lenguaje ya tiene entregas en la actividad y debe conservarse.") from None
-    return redirect("/admin/activities")
 
 
 @router.post("/languages")

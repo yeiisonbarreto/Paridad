@@ -1,5 +1,6 @@
 {% extends "base.html" %}
 {% from "macros.html" import csrf, pagination %}
+{% from "activity-components.html" import delivery_badge %}
 {% from "grade-components.html" import clarification_status %}
 {% block title %}Mis entregas · Paridad{% endblock %}
 {% block content %}
@@ -8,18 +9,55 @@
   <p>{{ user.display_name }}</p>
 </div>
 <div class="student-layout">
-  <details class="card panel-disclosure" open>
-    <summary>Subir archivo</summary>
-    {% if upload_count >= upload_limit %}<p class="muted disclosure-content">Alcanzaste el máximo de tres archivos.</p>
+  <section class="card student-deliveries">
+    <h2>Módulos</h2>
+    {% if modules %}
+    <nav class="module-links" aria-label="Módulos de entrega">
+      {% for module in modules %}
+      <a href="/student?module_id={{ module.id }}" class="button secondary compact-button"
+         {% if chosen and chosen.id == module.id %}aria-current="page"{% endif %}>
+        {{ module.code|upper }}<span class="screen-reader-only"> · {{ module.title }}</span>
+      </a>
+      {% endfor %}
+    </nav>
+    {% if chosen %}
+    <div class="delivery-selection" data-server-time="{{ now.timestamp() }}">
+      <h3>{{ chosen.title }}</h3>
+      <ul class="student-delivery-list">
+        {% for delivery in deliveries %}
+        <li data-delivery-id="{{ delivery.id }}" data-accepting="{{ 'true' if delivery.is_open else 'false' }}"
+            data-opens="{{ delivery.opens_at.timestamp() if delivery.opens_at else '' }}"
+            data-closes="{{ delivery.closes_at.timestamp() if delivery.closes_at else '' }}">
+          <div class="record-row">
+            <span class="record-summary-text">{{ delivery.code|upper }}<small>{{ delivery.title }}</small></span>
+            {{ delivery_badge(delivery.status) }}
+          </div>
+          {% if delivery.opens_at and delivery.status == 'scheduled' %}
+          <small class="table-detail">Apertura <time datetime="{{ delivery.opens_at.isoformat() }}">{{ delivery.opens_at|date_label }}</time></small>
+          {% endif %}
+          {% if delivery.closes_at %}
+          <small class="table-detail">Cierre <time datetime="{{ delivery.closes_at.isoformat() }}">{{ delivery.closes_at|date_label }}</time></small>
+          {% endif %}
+          <small class="delivery-countdown" data-countdown>
+            {% if delivery.status == 'open' and not delivery.closes_at %}Sin fecha límite{% endif %}
+          </small>
+        </li>
+        {% endfor %}
+      </ul>
+    </div>
+    {% if upload_count >= upload_limit %}<p class="muted">Alcanzaste el máximo de tres archivos.</p>
     {% elif activities %}
-    <form action="/student/submissions" method="post" enctype="multipart/form-data" class="stack disclosure-content" id="submission-form">
+    <h3>Subir archivo</h3>
+    <form action="/student/submissions" method="post" enctype="multipart/form-data" class="stack" id="submission-form">
       {{ csrf(user) }}
       <input type="hidden" name="request_id" value="{{ request_id }}">
       <div class="field">
         <label for="activity">Actividad</label>
         <select name="activity_id" required id="activity">
           <option value="">Selecciona la actividad</option>
-          {% for id, name in activities.items() %}<option value="{{ id }}">{{ name }}</option>{% endfor %}
+          {% for id, delivery in activities.items() %}
+          <option value="{{ id }}"{% if delivery.status != 'open' %} disabled{% endif %}>{{ delivery.code|upper }} · {{ delivery.title }}</option>
+          {% endfor %}
         </select>
       </div>
       <div class="field">
@@ -42,8 +80,10 @@
       </label>
       <button type="submit" class="button">Enviar a análisis</button>
     </form>
-    {% else %}<p class="muted disclosure-content">En este momento no hay actividades abiertas.</p>{% endif %}
-  </details>
+    {% else %}<p class="muted">Este módulo no admite entregas en este momento.</p>{% endif %}
+    {% else %}<p class="muted">Selecciona un módulo para ver sus actividades y plazos.</p>{% endif %}
+    {% else %}<p class="muted">Aún no hay módulos con actividades.</p>{% endif %}
+  </section>
   <section class="card history" aria-labelledby="history-heading">
     <h2 id="history-heading">Historial</h2>
     <p class="muted">La similitud puede actualizarse cuando se analizan nuevas entregas. El indicio de IA es orientativo.</p>
@@ -80,7 +120,7 @@
       </div>
       {% else %}<p class="empty">Aún no tienes archivos en esta página del historial.</p>{% endif %}
     </div>
-    {{ pagination('/student', page, has_next) }}
+    {{ pagination('/student', page, has_next, '&module_id=' ~ chosen.id if chosen else '') }}
   </section>
 </div>
 {% endblock %}

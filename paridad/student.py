@@ -12,6 +12,7 @@ from pydantic import BaseModel
 
 from .analysis import tokenize
 from .config import CLIENT_DETERRENCE, MAX_FILE_BYTES, MAX_SCOPE_SUBMISSIONS
+from .delivery import database_time, delivery_status
 from .security import auth_user, check_csrf, check_rate
 from .web import redirect, view
 
@@ -65,29 +66,49 @@ def owned_history(conn, student_id: int, page: int):
 
 
 @router.get("/student")
-def dashboard(request: Request, page: Annotated[int, Query(ge=1, le=10000)] = 1):
+def dashboard(
+    request: Request, page: Annotated[int, Query(ge=1, le=10000)] = 1,
+    module_id: Annotated[int | None, Query(gt=0, lt=2**63)] = None,
+):
     with request.app.state.pool.connection() as conn:
         user = auth_user(conn, request, "STUDENT")
-        scopes = conn.execute(
-            """SELECT a.id AS activity_id, a.code, a.title, l.id AS language_id, l.name, l.extensions
-               FROM activity_languages al JOIN activities a ON a.id = al.activity_id
-               JOIN languages l ON l.id = al.language_id WHERE a.is_open ORDER BY a.code, l.name"""
+        modules = conn.execute(
+            """SELECT m.* FROM modules m WHERE EXISTS (SELECT 1 FROM activities a WHERE a.module_id = m.id)
+               ORDER BY m.code""",
         ).fetchall()
+        if module_id is None and len(modules) == 1:
+            module_id = modules[0]["id"]
+        chosen = next((module for module in modules if module["id"] == module_id), None)
+        deliveries = conn.execute(
+            "SELECT * FROM activities WHERE module_id = %s ORDER BY code", (module_id,),
+        ).fetchall() if chosen else []
+        scopes = conn.execute(
+            """SELECT al.activity_id, l.id AS language_id, l.name, l.extensions
+               FROM activity_languages al JOIN activities a ON a.id = al.activity_id
+               JOIN languages l ON l.id = al.language_id WHERE a.module_id = %s ORDER BY l.name""",
+            (module_id,),
+        ).fetchall() if chosen else []
+        now = database_time(conn)
         results, has_next = owned_history(conn, user["id"], page)
         upload_count = conn.execute(
             "SELECT count(*) AS total FROM submissions WHERE student_id = %s", (user["id"],),
         ).fetchone()["total"]
     activities, languages = {}, {}
+    for delivery in deliveries:
+        delivery["status"] = delivery_status(delivery, now)
+        if delivery["status"] in {"open", "scheduled"}:
+            activities[delivery["id"]] = delivery
     for scope in scopes:
         activity_id, language_id = scope["activity_id"], scope["language_id"]
-        activities[activity_id] = f"{scope['code']} · {scope['title']}"
-        entry = languages.setdefault(language_id, {
-            "name": scope["name"], "extensions": ", ".join(scope["extensions"]), "activities": [],
-        })
-        entry["activities"].append(str(activity_id))
+        if activity_id in activities:
+            entry = languages.setdefault(language_id, {
+                "name": scope["name"], "extensions": ", ".join(scope["extensions"]), "activities": [],
+            })
+            entry["activities"].append(str(activity_id))
     return view(
-        request, "student.html", user=user, activities=activities, languages=languages,
-        results=results, upload_count=upload_count, upload_limit=MAX_STUDENT_FILES, deterrence=CLIENT_DETERRENCE, page=page, has_next=has_next, request_id=uuid4(),
+        request, "student.html", user=user, modules=modules, chosen=chosen, deliveries=deliveries, now=now,
+        activities=activities, languages=languages, results=results, upload_count=upload_count,
+        upload_limit=MAX_STUDENT_FILES, deterrence=CLIENT_DETERRENCE, page=page, has_next=has_next, request_id=uuid4(),
     )
 
 
@@ -146,15 +167,18 @@ def submit(
             "SELECT id FROM users WHERE id = %s AND active FOR NO KEY UPDATE", (user_id,),
         ).fetchone():
             raise HTTPException(403, "La cuenta está inhabilitada.")
-        if conn.execute(
-            "SELECT 1 FROM submissions WHERE student_id = %s AND request_id = %s", (user_id, request_id)
-        ).fetchone():
-            return redirect("/student")
+        previous = conn.execute(
+            """SELECT a.module_id FROM submissions s JOIN activities a ON a.id = s.activity_id
+               WHERE s.student_id = %s AND s.request_id = %s""", (user_id, request_id),
+        ).fetchone()
+        if previous:
+            return redirect(f"/student?module_id={previous['module_id']}")
         activity = conn.execute(
-            "SELECT is_open FROM activities WHERE id = %s FOR SHARE", (activity_id,)
+            "SELECT module_id, is_open, opens_at, closes_at FROM activities WHERE id = %s FOR SHARE", (activity_id,)
         ).fetchone()
         if not activity or not activity["is_open"]:
             raise HTTPException(400, "La actividad no admite entregas.")
+        check_delivery_window(activity, database_time(conn))
         scope = conn.execute(
             """SELECT l.extensions, l.profile, l.options FROM activity_languages al
                JOIN languages l ON l.id = al.language_id
@@ -179,9 +203,18 @@ def submit(
         ).fetchone()["total"]
         if count >= MAX_SCOPE_SUBMISSIONS:
             raise HTTPException(409, "La actividad alcanzó su capacidad para este lenguaje.")
+        check_delivery_window(activity, database_time(conn))
         conn.execute(
             """INSERT INTO submissions (activity_id, language_id, student_id, request_id, filename, source, source_bytes, ai_credit)
                VALUES (%s, %s, %s, %s, %s, %s, %s, %s) ON CONFLICT (student_id, request_id) DO NOTHING""",
             (activity_id, language_id, user_id, request_id, filename, source, source_bytes, ai_credit or None),
         )
-    return redirect("/student")
+    return redirect(f"/student?module_id={activity['module_id']}")
+
+
+def check_delivery_window(activity: dict, now: datetime) -> None:
+    status = delivery_status(activity, now)
+    if status == "scheduled":
+        raise HTTPException(400, "El plazo de esta actividad todavía no ha comenzado.")
+    if status == "expired":
+        raise HTTPException(400, "El plazo de esta actividad ya terminó.")

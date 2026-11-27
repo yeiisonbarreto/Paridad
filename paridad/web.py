@@ -19,8 +19,12 @@ def date_label(value: datetime) -> str:
     return value.astimezone(DISPLAY_TZ).strftime("%Y-%m-%d %H:%M %z")
 
 
+def local_datetime(value: datetime | None) -> str:
+    return value.astimezone(DISPLAY_TZ).strftime("%Y-%m-%dT%H:%M") if value else ""
+
+
 templates = Jinja2Templates(directory=BASE_DIR / "templates")
-templates.env.filters.update(percent=percent, date_label=date_label)
+templates.env.filters.update(percent=percent, date_label=date_label, local_datetime=local_datetime)
 templates.env.globals["paridad_logo_available"] = (BASE_DIR / "static" / "paridad-logo.png").is_file()
 
 

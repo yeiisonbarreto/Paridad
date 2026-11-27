@@ -1,0 +1,39 @@
+{% from "macros.html" import thresholds %}
+{% macro activity_fields(modules, languages, time_zone, activity=none) %}
+  <label>Módulo
+    <select name="module_id" required>
+      <option value="">Selecciona un módulo</option>
+      {% for module in modules %}
+      <option value="{{ module.id }}"{% if activity and activity.module_id == module.id %} selected{% endif %}>{{ module.code|upper }} · {{ module.title }}</option>
+      {% endfor %}
+    </select>
+  </label>
+  <div class="field-pair">
+    <label>Código<input name="code" placeholder="LAB01A" value="{{ activity.code|upper if activity else '' }}" maxlength="32" required></label>
+    <label>Título<input name="title" value="{{ activity.title if activity else '' }}" maxlength="120" required></label>
+  </div>
+  <fieldset class="delivery-window">
+    <legend>Plazo de entrega</legend>
+    <input type="hidden" name="edit_window" value="true">
+    <div class="field-pair">
+      <label>Apertura<input type="datetime-local" name="opens_at" value="{{ activity.opens_at|local_datetime if activity else '' }}"></label>
+      <label>Cierre<input type="datetime-local" name="closes_at" value="{{ activity.closes_at|local_datetime if activity else '' }}"></label>
+    </div>
+    <p class="field-help">{{ time_zone }} · Si omites la apertura, la actividad abre de inmediato. Si omites el cierre, queda sin fecha límite.</p>
+  </fieldset>
+  <fieldset>
+    <legend>Lenguajes permitidos</legend>
+    {% for language in languages %}
+    <label class="check"><input type="checkbox" name="language_ids" value="{{ language.id }}"{% if activity and language.id in activity.language_ids %} checked{% endif %}> {{ language.name }}</label>
+    {% endfor %}
+  </fieldset>
+  {{ thresholds(activity.similarity_threshold, activity.ai_threshold) if activity else thresholds() }}
+  {% if activity %}
+  <label class="check"><input type="checkbox" name="is_open" value="true"{% if activity.is_open %} checked{% endif %}> Aceptar nuevas entregas según el plazo</label>
+  {% endif %}
+{% endmacro %}
+
+{% macro delivery_badge(status) %}
+  {% set labels = {'open': 'Abierta', 'scheduled': 'Programada', 'closed': 'Cerrada', 'expired': 'Plazo vencido'} %}
+  <span data-window-status class="tag{% if status == 'scheduled' %} pending{% elif status in ['closed', 'expired'] %} alert{% endif %}">{{ labels[status] }}</span>
+{% endmacro %}

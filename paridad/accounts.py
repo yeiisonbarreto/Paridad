@@ -189,6 +189,28 @@ def confirm_bulk_account_deletion(request: Request, csrf: Csrf, token: Annotated
     return redirect("/admin/accounts")
 
 
+@router.get("/{student_id}/editar")
+@router.get("/{student_id}/estado")
+def account_action(request: Request, student_id: int):
+    operation = request.url.path.rsplit("/", 1)[-1]
+    with request.app.state.pool.connection() as conn:
+        user = administrator(conn, request)
+        student = student_account(conn, student_id)
+    return view(request, "account-action.html", user=user, student=student, operation=operation)
+
+
+@router.post("/{student_id}/estado")
+def set_account_state(request: Request, student_id: int, csrf: Csrf, active: Annotated[bool, Form()]):
+    with request.app.state.pool.connection() as conn:
+        administrator(conn, request, csrf)
+        student_account(conn, student_id, lock=True)
+        conn.execute("UPDATE users SET active = %s WHERE id = %s", (active, student_id))
+        if not active:
+            conn.execute("DELETE FROM sessions WHERE user_id = %s", (student_id,))
+            conn.execute("DELETE FROM student_invitations WHERE user_id = %s", (student_id,))
+    return redirect("/admin/accounts")
+
+
 @router.post("/{student_id}")
 def update_account(
     request: Request, student_id: int, csrf: Csrf, display_name: Name,
@@ -196,11 +218,14 @@ def update_account(
     new_password: Annotated[str, Form(max_length=128)] = "",
     email: Annotated[str | None, Form(max_length=254)] = None,
     edit_email: Annotated[bool, Form()] = False,
+    preserve_active: Annotated[bool, Form()] = False,
 ):
     try:
         with request.app.state.pool.connection() as conn:
             administrator(conn, request, csrf)
             student = student_account(conn, student_id, lock=True)
+            if preserve_active:
+                active = student["active"]
             address = optional_email(email or "") if email is not None or edit_email else student["email"]
             if new_password and not valid_password(new_password):
                 raise HTTPException(400, "La contraseña debe tener al menos 12 caracteres.")

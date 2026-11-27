@@ -1,32 +1,32 @@
 {% extends "base.html" %}
-{% from "macros.html" import csrf, thresholds %}
-{% macro language_choices(selected=[]) %}
-  <fieldset>
-    <legend>Lenguajes permitidos</legend>
-    {% for language in languages %}
-    <label class="check"><input type="checkbox" name="language_ids" value="{{ language.id }}"
-      {% if language.id in selected %}checked{% endif %}> {{ language.name }}</label>
-    {% endfor %}
-  </fieldset>
-{% endmacro %}
+{% from "macros.html" import csrf %}
+{% from "activity-components.html" import activity_fields, delivery_badge %}
 {% block title %}Actividades · Paridad{% endblock %}
 {% block content %}
-<div class="page-heading"><h1>Actividades y lenguajes</h1></div>
+<div class="page-heading"><h1>Actividades</h1></div>
 <div class="management-layout">
   <aside class="card" aria-labelledby="activity-tools">
     <h2 id="activity-tools">Agregar</h2>
-    <details class="record-disclosure" name="activity-tools"{% if not labs %} open{% endif %}>
-      <summary>Crear actividad</summary>
-      <form action="/admin/activities" method="post" class="stack record-form">
+    <details class="record-disclosure" name="activity-tools"{% if not modules %} open{% endif %}>
+      <summary>Crear módulo</summary>
+      <form action="/admin/activities/modulos" method="post" class="stack record-form">
         {{ csrf(user) }}
         <div class="field-pair">
-          <label>Código<input name="code" placeholder="lab01" maxlength="32" required></label>
+          <label>Código<input name="code" placeholder="LAB01" maxlength="32" required></label>
           <label>Título<input name="title" maxlength="120" required></label>
         </div>
-        {{ language_choices() }}
-        {{ thresholds() }}
+        <button type="submit" class="button">Crear módulo</button>
+      </form>
+    </details>
+    <details class="record-disclosure" name="activity-tools">
+      <summary>Crear actividad</summary>
+      {% if modules %}
+      <form action="/admin/activities" method="post" class="stack record-form">
+        {{ csrf(user) }}
+        {{ activity_fields(modules, languages, time_zone) }}
         <button type="submit" class="button">Crear actividad</button>
       </form>
+      {% else %}<p class="muted disclosure-content">Crea un módulo para agregar sus actividades.</p>{% endif %}
     </details>
     <details class="record-disclosure" name="activity-tools">
       <summary>Agregar lenguaje</summary>
@@ -48,23 +48,39 @@
     </details>
   </aside>
   <section class="card">
-    <h2>Actividades existentes</h2>
-    {% for activity in labs %}
-    <details class="record-disclosure" name="activity-records">
-      <summary>
-        <span class="record-summary-text">{{ activity.title }}<small>{{ activity.code }}</small></span>
-        <span class="tag">{{ 'Abierta' if activity.is_open else 'Cerrada' }}</span>
-      </summary>
-      <form action="/admin/activities/{{ activity.id }}" method="post" class="stack record-form">
-        {{ csrf(user) }}
-        <label>Título<input name="title" value="{{ activity.title }}" maxlength="120" required></label>
-        <label class="check"><input type="checkbox" name="is_open" value="true" {% if activity.is_open %}checked{% endif %}> Aceptar nuevas entregas</label>
-        {{ language_choices(activity.language_ids) }}
-        {{ thresholds(activity.similarity_threshold, activity.ai_threshold) }}
-        <button type="submit" class="button">Guardar actividad</button>
-      </form>
-    </details>
-    {% else %}<p class="empty">Aún no hay actividades.</p>{% endfor %}
+    <h2>Módulos</h2>
+    {% for module in modules %}
+    <section class="module-group" aria-labelledby="module-{{ module.id }}" data-module-id="{{ module.id }}">
+      <div class="record-row">
+        <h3 id="module-{{ module.id }}" class="record-summary-text">{{ module.code|upper }}<small>{{ module.title }}</small></h3>
+        <details class="file-menu" data-dropdown>
+          <summary aria-label="Acciones del módulo {{ module.code|upper }}">Acciones</summary>
+          <div class="file-actions">
+            <a href="/admin/activities/modulos/{{ module.id }}/editar" data-record-action>Modificar módulo</a>
+            <a href="/admin/activities/modulos/{{ module.id }}/eliminar" class="text-danger" data-record-action>Eliminar módulo</a>
+          </div>
+        </details>
+      </div>
+      <ul class="delivery-list">
+        {% for activity in deliveries[module.id] %}
+        <li class="record-row" data-delivery-id="{{ activity.id }}">
+          <span class="record-summary-text">{{ activity.code|upper }}<small>{{ activity.title }}</small>
+            {% if activity.closes_at %}<small>Cierre {{ activity.closes_at|date_label }}</small>{% endif %}
+          </span>
+          {{ delivery_badge(activity.status) }}
+          <details class="file-menu" data-dropdown>
+            <summary aria-label="Acciones de {{ activity.code|upper }}">Acciones</summary>
+            <div class="file-actions">
+              <a href="/admin/activities/{{ activity.id }}/editar" data-record-action>Modificar</a>
+              <a href="/admin/activities/{{ activity.id }}/estado" data-record-action>{{ 'Cerrar entregas' if activity.is_open else 'Reabrir entregas' }}</a>
+              <a href="/admin/activities/{{ activity.id }}/eliminar" class="text-danger" data-record-action>Eliminar</a>
+            </div>
+          </details>
+        </li>
+        {% else %}<li class="muted">Sin actividades.</li>{% endfor %}
+      </ul>
+    </section>
+    {% else %}<p class="empty">Aún no hay módulos.</p>{% endfor %}
   </section>
 </div>
 {% endblock %}

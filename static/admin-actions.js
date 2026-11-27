@@ -1,0 +1,120 @@
+"use strict";
+
+const recordDialog = document.querySelector("#record-action-dialog");
+if (recordDialog?.showModal) {
+  const content = recordDialog.querySelector("[data-record-content]");
+  const error = recordDialog.querySelector("[data-record-error]");
+  const loading = recordDialog.querySelector("[data-record-loading]");
+  let opener;
+  let busy = false;
+
+  function closeRecord() {
+    if (!busy) recordDialog.close();
+  }
+
+  recordDialog.addEventListener("click", event => {
+    if (event.target === recordDialog || event.target.closest("[data-record-close]")) {
+      event.preventDefault();
+      closeRecord();
+    }
+  });
+  recordDialog.addEventListener("cancel", event => { if (busy) event.preventDefault(); });
+  recordDialog.addEventListener("close", () => {
+    content.replaceChildren();
+    opener?.focus({ preventScroll: true });
+  });
+
+  function showRecord(url, origin, body) {
+    if (recordDialog.open) return;
+    opener = origin.closest(".file-menu")?.querySelector("summary") || origin;
+    const menu = opener.closest(".file-menu");
+    if (menu) menu.open = false;
+    error.hidden = true;
+    loading.hidden = false;
+    recordDialog.removeAttribute("aria-labelledby");
+    recordDialog.showModal();
+    loadRecord(url, body);
+  }
+
+  async function loadRecord(url, body, form) {
+    busy = true;
+    error.hidden = true;
+    const submit = form?.querySelector('[type="submit"]');
+    if (submit) submit.disabled = true;
+    try {
+      const response = await fetch(url, {
+        method: body ? "POST" : "GET",
+        body,
+        headers: { Accept: "application/json" },
+        mode: "same-origin",
+      });
+      if (!response.ok) {
+        const result = await response.json().catch(() => null);
+        throw new Error(result?.detail || "No se pudo completar la acción.");
+      }
+      if (response.redirected) {
+        window.location.assign(response.url);
+        return;
+      }
+      const page = new DOMParser().parseFromString(await response.text(), "text/html");
+      const panel = page.querySelector("[data-record-panel]");
+      if (!panel) throw new Error("No se pudo abrir la acción.");
+      content.replaceChildren(panel);
+      const title = content.querySelector("h1");
+      title.id = "record-action-title";
+      title.tabIndex = -1;
+      recordDialog.setAttribute("aria-labelledby", title.id);
+      title.focus();
+    } catch (failure) {
+      error.textContent = failure.message;
+      error.hidden = false;
+      if (!form) {
+        const dismiss = document.createElement("button");
+        dismiss.type = "button";
+        dismiss.className = "button secondary";
+        dismiss.dataset.recordClose = "";
+        dismiss.textContent = "Cerrar";
+        content.replaceChildren(dismiss);
+        dismiss.focus();
+      }
+    } finally {
+      busy = false;
+      loading.hidden = true;
+      if (submit) submit.disabled = false;
+    }
+  }
+
+  document.addEventListener("click", event => {
+    const link = event.target.closest("a[data-record-action]");
+    if (!link || event.ctrlKey || event.metaKey || event.shiftKey || event.altKey) return;
+    event.preventDefault();
+    showRecord(link.href, link);
+  });
+
+  document.addEventListener("submit", event => {
+    const form = event.target;
+    if (form.matches("form[data-record-action]")) {
+      event.preventDefault();
+      showRecord(form.action, form, new FormData(form));
+    } else if (content.contains(form)) {
+      event.preventDefault();
+      if (!busy) loadRecord(form.action, new FormData(form), form);
+    }
+  });
+}
+
+document.addEventListener("click", async event => {
+  const button = event.target.closest("[data-copy-invitation]");
+  if (!button) return;
+  const panel = button.closest("[data-record-panel]");
+  const input = panel.querySelector("#invitation-link");
+  const status = panel.querySelector("[data-copy-status]");
+  try {
+    await navigator.clipboard.writeText(input.value);
+    status.textContent = "Enlace copiado.";
+  } catch {
+    input.focus();
+    input.select();
+    status.textContent = document.execCommand("copy") ? "Enlace copiado." : "Enlace seleccionado. Puedes copiarlo.";
+  }
+});

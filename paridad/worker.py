@@ -11,7 +11,7 @@ from psycopg_pool import PoolTimeout
 
 from .analysis import ANALYSIS_VERSION, SIMILARITY_VERSION, Prepared, analyze_style, compare, tokenize
 from .db import make_pool
-from .grading import static_rubric
+from .grading import quality_points, static_rubric
 from .notices import publish_automatic
 from .submission_records import recompute_similarity
 
@@ -25,7 +25,7 @@ def process_submission(conn, job: dict) -> None:
     prepared = Prepared.from_analysis(normalized)
     ai_bp, features = analyze_style(lexed)
     rubric = static_rubric(job["source"], job["profile"], lexed)
-    quality = rubric["structure"] + rubric["practices"] + rubric["comments"]
+    quality = quality_points(rubric)
     max_bp = 0
 
     conn.execute(
@@ -156,9 +156,9 @@ def refresh_legacy_similarity(conn) -> bool:
 
 def backfill_grade(conn) -> bool:
     row = conn.execute(
-        """SELECT s.id, s.source, l.profile, l.options FROM submissions s
+        """SELECT s.id, s.source, s.rubric, s.quality_points, l.profile, l.options FROM submissions s
            JOIN languages l ON l.id = s.language_id
-           WHERE s.state = 'completed' AND s.rubric IS NULL
+           WHERE s.state = 'completed' AND (s.rubric @> '{"version": 2}') IS NOT TRUE
            ORDER BY s.created_at, s.id LIMIT 1 FOR NO KEY UPDATE OF s SKIP LOCKED"""
     ).fetchone()
     if not row:
@@ -166,9 +166,10 @@ def backfill_grade(conn) -> bool:
     try:
         lexed = tokenize(row["source"], row["profile"], row["options"])
         rubric = static_rubric(row["source"], row["profile"], lexed)
-        quality = rubric["structure"] + rubric["practices"] + rubric["comments"]
+        quality = quality_points(rubric)
     except ValueError:
-        rubric, quality = {"unavailable": True}, None
+        rubric = {**(row["rubric"] or {"unavailable": True}), "version": 2}
+        quality = row["quality_points"]
     conn.execute("UPDATE submissions SET rubric = %s, quality_points = %s WHERE id = %s",
                  (Jsonb(rubric), quality, row["id"]))
     return True

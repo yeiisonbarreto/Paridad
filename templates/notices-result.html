@@ -5,6 +5,6 @@
   <h1>Avisos</h1>
   <p role="status">{{ published }} {{ 'aviso publicado' if published == 1 else 'avisos publicados' }} en Paridad.</p>
   {% if skipped %}<p>{{ skipped }} {{ 'cuenta omitida' if skipped == 1 else 'cuentas omitidas' }} por inactividad o un aviso reciente.</p>{% endif %}
-  <a class="button secondary" href="{{ destination }}">Volver</a>
+  <a class="button secondary back-button" href="{{ destination }}">Volver</a>
 </section>
 {% endblock %}

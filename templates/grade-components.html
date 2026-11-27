@@ -6,10 +6,20 @@
     <p class="grade-total">{{ final_grade }} <span>/ 50</span></p>
     {% if grade.automatic_grade is not none %}
     <dl class="grade-breakdown">
+      {% if grade.rubric.readability is defined %}
+      <div><dt>Estructura</dt><dd>{{ grade.rubric.structure }} / 10</dd></div>
+      <div><dt>Legibilidad</dt><dd>{{ grade.rubric.readability }} / 5</dd></div>
+      <div><dt>Identificadores</dt><dd>{{ grade.rubric.naming }} / 5</dd></div>
+      <div><dt>Buenas prácticas</dt><dd>{{ grade.rubric.practices }} / 5</dd></div>
+      <div><dt>Comentarios</dt><dd>{{ grade.rubric.comments }} / 5</dd></div>
+      <div><dt>Mantenibilidad</dt><dd>{{ grade.rubric.maintainability }} / 5</dd></div>
+      {% else %}
       <div><dt>Estructura</dt><dd>{{ grade.rubric.structure }} / 15</dd></div>
       <div><dt>Buenas prácticas</dt><dd>{{ grade.rubric.practices }} / 10</dd></div>
       <div><dt>Comentarios</dt><dd>{{ grade.rubric.get('comments', grade.rubric.get('english_comments')) }} / 10</dd></div>
-      <div><dt>Similitud</dt><dd>{{ grade.automatic_grade - grade.quality_points }} / 15</dd></div>
+      {% endif %}
+      <div><dt>Base de originalidad</dt><dd>15 / 15</dd></div>
+      <div><dt>Descuento por similitud</dt><dd>−{{ grade.similarity_penalty }} puntos</dd></div>
     </dl>
     {% if grade.rubric.comments_descriptive is defined %}
     <p class="muted">{{ grade.rubric.comments_descriptive }} de {{ grade.rubric.comments_found }} comentarios descriptivos.</p>

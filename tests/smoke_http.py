@@ -8,9 +8,11 @@ import ssl
 import time
 from concurrent.futures import ThreadPoolExecutor
 from contextlib import ExitStack
+from datetime import datetime, timedelta
 from io import BytesIO
 from uuid import uuid4
 from zipfile import ZipFile
+from zoneinfo import ZoneInfo
 
 import httpx
 from openpyxl import Workbook, load_workbook
@@ -144,12 +146,27 @@ def main():
             credentials.close()
         post(admin, "/admin/languages", admin_csrf, code=language_code, name=language_code,
              extensions=".txt", comments="c", keywords="int return if")
+        module_code = f"mod_{suffix}"
+        post(admin, "/admin/activities/modulos", admin_csrf, code=module_code, title="Módulo común")
         activities_page = assert_status(admin.get("/admin/activities")).text
+        module_id = re.search(r'<option value="(\d+)">' + module_code.upper() + r' ·', activities_page)[1]
         c_id = re.search(r'name="language_ids" value="([0-9]+)"\s*> C</label>', activities_page)[1]
         custom_id = re.search(r'name="language_ids" value="([0-9]+)"\s*> ' + language_code + "</label>", activities_page)[1]
-        post(admin, "/admin/activities", admin_csrf, code=lab, title="Laboratorio común", language_ids=[c_id, custom_id])
-        post(admin, "/admin/activities", admin_csrf, code=separate_lab, title="Laboratorio aparte", language_ids=c_id)
+        post(admin, "/admin/activities", admin_csrf, code=lab, title="Laboratorio común", language_ids=[c_id, custom_id],
+             module_id=module_id)
+        post(admin, "/admin/activities", admin_csrf, code=separate_lab, title="Laboratorio aparte", language_ids=c_id,
+             module_id=module_id)
         post(admin, "/admin/activities", admin_csrf, code=concurrent_lab, title="Laboratorio concurrente", language_ids=c_id)
+        date = datetime.now(ZoneInfo(os.getenv("PARIDAD_TIME_ZONE", "America/Bogota")))
+        deadline_lab = f"hora_{suffix}"
+
+        def local_date(days):
+            return (date + timedelta(days=days)).strftime("%Y-%m-%dT%H:%M")
+
+        post(admin, "/admin/activities", admin_csrf, 400, code=deadline_lab, title="Entrega programada", language_ids=c_id,
+             module_id=module_id, opens_at=local_date(2), closes_at=local_date(1))
+        post(admin, "/admin/activities", admin_csrf, code=deadline_lab, title="Entrega programada", language_ids=c_id,
+             module_id=module_id, opens_at=local_date(1), closes_at=local_date(2))
         post(admin, "/admin/settings", admin_csrf, similarity_threshold=40, ai_threshold=30)
 
         assert login(first, first_name, student_pw) == "/student"
@@ -166,12 +183,31 @@ def main():
         assert_status(admin.post("/admin/settings", headers={"Origin": "https://invalid.example"},
                                  data={"csrf": admin_csrf, "similarity_threshold": 1, "ai_threshold": 1}), 403)
 
-        activity_id = re.search(r'<option value="(\d+)">' + lab + " ·", student_response.text)[1]
-        separate_id = re.search(r'<option value="(\d+)">' + separate_lab + " ·", student_response.text)[1]
+        def delivery_id(page, code):
+            return re.search(r'data-delivery-id="(\d+)"[^>]*>\s*<div class="record-row">\s*'
+                             r'<span class="record-summary-text">' + code.upper(), page)[1]
+
+        module_page = assert_status(first.get("/student", params={"module_id": module_id})).text
+        activity_id = delivery_id(module_page, lab)
+        separate_id = delivery_id(module_page, separate_lab)
+        deadline_id = delivery_id(module_page, deadline_lab)
+        assert not any(concurrent_lab.upper() in option for option in re.findall(r'<option[^>]*>([^<]+)</option>', module_page))
+        assert re.search(rf'<option value="{deadline_id}" disabled>', module_page)
+        deadline_route = f"/admin/activities/{deadline_id}"
+        assert_status(first.get(deadline_route + "/editar"), 403)
+        upload(second, second_csrf, deadline_id, c_id, "temprano.c", STYLE_CODE, status=400)
+        post(admin, deadline_route, admin_csrf, title="Vencida", language_ids=c_id, is_open="true",
+             opens_at=local_date(-2), closes_at=local_date(-1))
+        upload(second, second_csrf, deadline_id, c_id, "tarde.c", STYLE_CODE, status=400)
+        post(admin, deadline_route + "/estado", admin_csrf, is_open="false")
+        assert "Reabrir entregas" in assert_status(admin.get(deadline_route + "/estado")).text
+        post(admin, deadline_route + "/eliminar", admin_csrf)
+        assert_status(admin.get(deadline_route + "/editar"), 404)
         nonce = str(uuid4())
         upload(first, first_csrf, activity_id, c_id, "primero.c", STYLE_CODE, request_id=nonce)
         row = wait_result(first, "primero.c")
         assert row["similarity_bp"] == 0 and not row["similarity_alert"]
+        original_grade = row["grade"]
         assert row["ai_bp"] > 3000 and row["ai_alert"]
         ai_notice = wait_notice(first, "primero.c")
         assert "indicio de IA" in ai_notice and "Umbral 30 %" in ai_notice
@@ -245,6 +281,7 @@ def main():
             workbook.close()
 
         graded = wait_result(first, "primero.c", 10000)
+        assert graded["grade"] == max(0, original_grade - 30)
         inbox_first = wait_notice(first, "La similitud")
         inbox_second = wait_notice(second, "compania.c")
         assert "compania.c" not in inbox_first and "primero.c" not in inbox_second
@@ -372,7 +409,10 @@ def main():
         upload(first, first_csrf, separate_id, c_id, "cuarto.c", STYLE_CODE, status=409)
         for filename in ("otro-lenguaje.txt", "mismo-estudiante.c"):
             post(admin, f"/admin/submissions/{existing[filename]}/eliminar", admin_csrf)
-        concurrent_id = re.search(r'<option value="(\d+)">' + concurrent_lab + " ·", student_response.text)[1]
+        concurrent_module = re.search(r'/student\?module_id=(\d+)"[^>]*>\s*' + concurrent_lab.upper(),
+                                      student_response.text)[1]
+        concurrent_id = delivery_id(assert_status(first.get("/student", params={"module_id": concurrent_module})).text,
+                                    concurrent_lab)
         with ThreadPoolExecutor(max_workers=2) as executor:
             tasks = [
                 executor.submit(upload, first, first_csrf, concurrent_id, c_id, "par-uno.c", STYLE_CODE),
@@ -422,8 +462,15 @@ def main():
         upload(first, first_csrf, activity_id, c_id, "largo.c", b"x" * (145 * 1024), status=413)
 
         account_page = assert_status(admin.get("/admin/accounts")).text
-        account_id = re.search(r'<small>' + re.escape(second_name) + r'</small>\s*</span>\s*</summary>\s*'
-                               r'<form action="/admin/accounts/(\d+)"', account_page)[1]
+        def account_id_for(page, name):
+            return re.search(r'<input type="checkbox" name="selection" value="(\d+)"[^>]*\('
+                             + re.escape(name) + r'\)"', page)[1]
+
+        account_id = account_id_for(account_page, second_name)
+        assert "Modificar cuenta" in assert_status(admin.get(f"/admin/accounts/{account_id}/editar")).text
+        post(admin, f"/admin/accounts/{account_id}/estado", admin_csrf, active="false")
+        assert_status(second.get("/api/student/submissions"), 401)
+        post(admin, f"/admin/accounts/{account_id}/estado", admin_csrf, active="true")
         post(admin, f"/admin/accounts/{account_id}", admin_csrf, display_name=second_name,
              active="true", new_password=secrets.token_urlsafe(18))
         assert_status(second.get("/api/student/submissions"), 401)
@@ -440,11 +487,7 @@ def main():
         third_name = f"carla_{suffix}"
         post(admin, "/admin/accounts", admin_csrf, username=third_name, display_name=third_name, password=student_pw)
         account_page = assert_status(admin.get("/admin/accounts")).text
-        ids = [
-            re.search(r'<small>' + re.escape(name) + r'</small>\s*</span>\s*</summary>\s*'
-                      r'<form action="/admin/accounts/(\d+)"', account_page)[1]
-            for name in (first_name, third_name)
-        ]
+        ids = [account_id_for(account_page, name) for name in (first_name, third_name)]
         invitation = post(admin, f"/admin/accounts/{ids[1]}/invitacion", admin_csrf, 200)
         token = re.search(r'/invitacion\?token=([A-Za-z0-9_-]+)', invitation.text)[1]
         assert_status(guest.get("/invitacion", params={"token": token}))

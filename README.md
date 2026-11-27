@@ -45,7 +45,7 @@ Para importar, descarga la plantilla en **Cuentas → Importar estudiantes**. Co
 
 Tras importar, guarda `paridad-credenciales.xlsx`. Contiene el ID que se usa para iniciar sesión y una contraseña inicial aleatoria distinta por estudiante. El archivo se entrega al importar. PostgreSQL guarda los hashes y el administrador puede restablecer contraseñas desde **Cuentas**. Recarga la página para ver las cuentas nuevas.
 
-Para que un estudiante elija su contraseña, abre su cuenta y pulsa **Generar enlace de invitación**. El enlace es personal, sirve una vez y caduca en 24 horas. Generar otro reemplaza el anterior.
+En **Cuentas → Acciones** puedes modificar, inhabilitar, reactivar o eliminar una cuenta. Para que un estudiante elija su contraseña, selecciona **Generar enlace de invitación** y pulsa **Copiar enlace**. El enlace es personal, sirve una vez y caduca en 24 horas. Generar otro reemplaza el anterior.
 
 ## Cuenta y entregas del administrador
 
@@ -55,9 +55,17 @@ En **Archivos**, abre **Acciones** para ver, descargar o eliminar una entrega. M
 
 En **Informes**, **Descargar Excel** está al lado de la selección. Si marcas archivos, el libro incluye esas entregas y sus comparaciones. Si dejas la selección vacía o marcas **Todos los archivos del filtro**, incluye todas las páginas de los filtros activos. Desde **Comparaciones**, abre **Ver** para revisar ambos archivos con las líneas coincidentes resaltadas. Los grupos reúnen archivos de la misma actividad y lenguaje conectados por coincidencias por encima del umbral.
 
+## Módulos y plazos
+
+En **Actividades**, crea un módulo como **LAB01** y asigna al módulo las actividades **LAB01A** y **LAB01B**. Cada actividad tiene sus propios lenguajes y horarios. Los horarios se interpretan en `PARIDAD_TIME_ZONE` (por defecto, `America/Bogota`). Cuando el estudiante abre un módulo desde **Mis entregas**, puede consultar el cierre y el tiempo restante de cada entrega.
+
+En **Acciones** puedes editar la actividad, cerrar o reabrir entregas, y eliminarla tras confirmar. Reabrir conserva el plazo configurado. Eliminar una actividad borra sus archivos, comparaciones y aclaraciones vinculadas. La migración asigna cada actividad existente a un módulo de su mismo código y conserva su estado y sus entregas.
+
 ## Notas, avisos y aclaraciones
 
-Cada estudiante puede tener hasta tres archivos en total. El administrador puede liberar cupo eliminando una entrega. Los archivos históricos se conservan. La nota automática combina estructura (15 puntos), buenas prácticas y nombres legibles (10), comentarios descriptivos (10) y similitud (15). En las entregas nuevas, los comentarios se valoran por su contenido descriptivo. Las entregas anteriores conservan los puntos registrados en este criterio. La similitud reduce progresivamente sus puntos a medida que aumenta el porcentaje. Los indicios de IA se usan para avisos de revisión. El análisis estático evalúa el texto y la estructura del archivo sin ejecutar el programa.
+Cada estudiante puede tener hasta tres archivos en total. El administrador puede liberar cupo eliminando una entrega.
+
+La nota automática combina hasta 35 puntos de calidad estática del código y 15 puntos de base de originalidad. La calidad evalúa estructura (10) y legibilidad (5), identificadores (5), buenas prácticas (5), comentarios (5) y mantenibilidad (5). Paridad resta hasta 30 puntos, en proporción a la máxima similitud, con un mínimo final de 0. Con 35 puntos de calidad, una similitud del 50 % da 35/50 y una del 100 % da 20/50. El trabajador actualiza la rúbrica de las entregas anteriores y se respetan las notas ajustadas por el administrador. Los indicios de IA se usan para avisos de revisión.
 
 El estudiante consulta el desglose desde su historial y puede solicitar una aclaración por archivo. En **Aclaraciones**, en el menú superior, el administrador puede responder, resolver o rechazar la solicitud y ajustar la nota. El Excel distingue la nota automática, la docente y la final.
 
@@ -69,7 +77,7 @@ En **Informes → Entregas** puedes seleccionar archivos y pulsar **Enviar aviso
 paridad/
 ├── paridad/
 │   ├── main.py, web.py, security.py   # HTTP, sesiones, CSRF y límites de tasa
-│   ├── admin.py, student.py          # Administración, informes e historial propio
+│   ├── admin.py, activities.py, student.py # Administración, módulos e historial propio
 │   ├── analysis.py, worker.py        # Análisis léxico y recálculo transaccional
 │   └── config.py, db.py, cli.py      # Configuración, PostgreSQL y comandos locales
 ├── migrations/001_initial.sql       # Esquema, índices y perfiles iniciales

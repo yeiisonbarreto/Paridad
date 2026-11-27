@@ -42,6 +42,7 @@ Los porcentajes del motor se guardan en puntos básicos. **9500** representa **9
 erDiagram
     USERS ||--o{ SESSIONS : abre
     USERS ||--o{ SUBMISSIONS : entrega
+    MODULES ||--o{ ACTIVITIES : organiza
     ACTIVITIES ||--o{ ACTIVITY_LANGUAGES : habilita
     LANGUAGES ||--o{ ACTIVITY_LANGUAGES : configura
     ACTIVITY_LANGUAGES ||--o{ SUBMISSIONS : recibe
@@ -59,7 +60,8 @@ erDiagram
 | `rate_limits` | Operación, IP o cuenta, inicio de ventana y contador | PK compuesta para el incremento atómico e índice de expiración |
 | `settings` | Fila única con los umbrales globales | Restricciones de 0 a 100 |
 | `languages` | Código, nombre, perfil, extensiones y opciones JSONB | Código único |
-| `activities` | Código, título, apertura y umbrales opcionales | Código único |
+| `modules` | Código y título del módulo | Código único |
+| `activities` | Módulo, código, título, estado, fechas de apertura y cierre y umbrales opcionales | Código único, índice por módulo y código, cierre posterior a la apertura |
 | `activity_languages` | Actividad y lenguaje habilitado | PK compuesta, índice inverso por lenguaje |
 | `submissions` | UUID, estudiante, ámbito, nombre, fuente, bytes originales si están disponibles, crédito, estado, intentos, versión, tokens, mapa de líneas, indicio IA, máxima similitud, rúbrica y nota docente | FK al ámbito; idempotencia por estudiante; índices para historial, cola y entregas completadas |
 | `similarity_pairs` | Ámbito, dos UUID, sus propietarios, resultado, métricas y fragmentos JSONB | PK de UUID ordenados, propietarios distintos, dos FK compuestas al mismo ámbito, índice de informe y extremo derecho |
@@ -67,7 +69,7 @@ erDiagram
 | `review_notices` | Destinatario, entrega en avisos automáticos, causas y fecha de lectura | Índices de historial y de avisos sin leer por estudiante |
 | `schema_migrations` | Nombre del SQL aplicado y fecha | PK por nombre de migración |
 
-El código de la actividad distingue los laboratorios y puede incluir curso o grupo. Cada actividad tiene un conjunto de perfiles habilitados. El módulo de administración conserva los vínculos que ya tienen entregas. El SQL ejecutable está en [las migraciones](../migrations).
+Un módulo agrupa actividades. Cada actividad mantiene su propio ámbito de comparación y puede tener una ventana de entrega. El servidor verifica el horario al recibir el archivo, usando el reloj de PostgreSQL. Cada actividad tiene un conjunto de perfiles habilitados. El módulo de administración conserva los vínculos que ya tienen entregas. El SQL ejecutable está en [las migraciones](../migrations).
 
 ## Análisis por lenguaje
 
@@ -109,15 +111,17 @@ El total se multiplica por el mínimo entre 1, `tokens / 100` y `líneas de cód
 
 ### Nota y aclaraciones
 
-La nota automática suma hasta 15 puntos de estructura, 10 de prácticas, 10 de comentarios y 15 de similitud. Estructura incluye consistencia de sangría, longitud de línea y organización léxica. Prácticas incluye nombres, marcas de trabajo pendiente y algunas funciones problemáticas en C. El criterio de comentarios considera la proporción de fragmentos descriptivos. El administrador puede ajustar la nota. Los puntos de similitud se calculan como el entero más próximo a `15 × (1 − similitud)`. El máximo de similitud puede cambiar cuando se analiza una entrega nueva o se elimina una existente, y PostgreSQL actualiza la nota automática con ese cambio. Una nota docente prevalece sobre el cálculo automático hasta que el administrador restaura la rúbrica.
+La calidad estática suma hasta 35 puntos. La estructura (10) considera sangría y organización. La legibilidad (5) mide la longitud de las líneas. Los identificadores (5) se valoran por su forma. Las buenas prácticas (5) consideran funciones de riesgo en C y marcas de trabajo pendiente. Los comentarios (5) se valoran por su proporción descriptiva. La mantenibilidad (5) penaliza el anidamiento excesivo en C o Verilog y los bloques extensos sin separación en los otros perfiles.
+
+PostgreSQL calcula `max(0, calidad + 15 − redondear(30 × similitud máxima))`, con la similitud expresada entre 0 y 1. Así, una nueva coincidencia o una eliminación ajusta la nota junto con la similitud máxima. El trabajador vuelve a evaluar las rúbricas anteriores en segundo plano. Una nota ajustada por el administrador prevalece y se conserva la nota registrada al solicitar una aclaración.
 
 ## Autorización y endpoints
 
 | Ruta | Método | Acceso |
 |---|---|---|
 | `/login`, `/logout` | GET/POST para entrada, POST para salida | Entrada con cuenta asignada. Los POST verifican origen y CSRF. |
-| `/student` | GET | Estudiante. Actividades abiertas e historial propio. |
-| `/student/submissions` | POST | Estudiante. Propietario obtenido de la sesión, combinación habilitada, idempotencia y límite de tasa. |
+| `/student` | GET | Estudiante. Módulos, plazos de sus actividades e historial propio. |
+| `/student/submissions` | POST | Estudiante. Propietario obtenido de la sesión, combinación habilitada, plazo vigente, idempotencia y límite de tasa. |
 | `/student/submissions/{id}/nota`, `/student/submissions/{id}/aclaracion` | GET, POST | Estudiante. Nota propia y una solicitud por entrega. |
 | `/student/avisos`, `/student/avisos/leer` | GET, POST | Estudiante. Bandeja propia y registro de lectura. |
 | `/api/student/submissions` | GET | Estudiante. Proyección tipada de su propio historial, sin registros de pares, identidades de terceros ni fuentes. |
@@ -128,6 +132,8 @@ La nota automática suma hasta 15 puntos de estructura, 10 de prácticas, 10 de 
 | `/admin/accounts/{id}/eliminar`, `/admin/accounts/{id}/invitacion` | GET/POST, POST | Administrador. Confirmación y borrado definitivo o generación de un enlace de invitación. |
 | `/invitacion` | GET/POST | Estudiante con token válido. Configuración de contraseña con un enlace de un solo uso. |
 | `/admin/activities`, `/admin/activities/{id}`, `/admin/languages` | GET/POST, POST, POST | Administrador. Actividades, umbrales por actividad y perfiles configurables. |
+| `/admin/activities/modulos`, `/admin/activities/modulos/{id}/{acción}` | POST, GET/POST | Administrador. Crear, editar y eliminar módulos vacíos. |
+| `/admin/activities/{id}/{acción}` | GET, POST | Administrador. Formularios, cierre, reapertura y eliminación de actividades. |
 | `/admin/reports`, `/admin/reports/{izq}/{der}` | GET | Administrador. Grupos, comparaciones y fragmentos. |
 | `/admin/reports/exportar` | GET, POST | Administrador. Excel global por filtro o por selección, con similitudes, indicios y notas. |
 | `/admin/avisos` | POST | Administrador. Avisos manuales a estudiantes seleccionados. |

@@ -61,7 +61,7 @@ def migrate() -> None:
             conn.execute("GRANT USAGE ON ALL SEQUENCES IN SCHEMA public TO paridad_app")
             conn.execute(
                 """GRANT SELECT, INSERT, UPDATE, DELETE ON
-                   users, sessions, rate_limits, settings, languages, activities,
+                   users, sessions, rate_limits, settings, languages, modules, activities,
                    activity_languages, submissions, similarity_pairs, student_invitations, bulk_deletions,
                    grade_clarifications, review_notices TO paridad_app"""
             )
