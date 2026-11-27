@@ -140,8 +140,10 @@ def main():
         assert "paridad-credenciales.xlsx" in imported.headers["content-disposition"]
         credentials = load_workbook(BytesIO(imported.content), read_only=True)
         try:
+            assert list(credentials.active.values)[0] == ("ID", "Contraseña")
+            assert credentials.active.max_column == 2
             assert credentials.active["A2"].value == second_name
-            second_pw = credentials.active["D2"].value
+            second_pw = credentials.active["B2"].value
         finally:
             credentials.close()
         post(admin, "/admin/languages", admin_csrf, code=language_code, name=language_code,
@@ -238,17 +240,25 @@ def main():
         assert "100,00 %" in own_page and second_name not in own_page and "compania.c" not in own_page
         assert [row["filename"] for row in history(second)] == ["compania.c", "otra-actividad.c"]
 
-        reports = assert_status(admin.get("/admin/reports", params={"activity_id": activity_id, "language_id": c_id})).text
-        assert "Grupos de similitud" in reports and "3 archivos" in reports
+        scope_filters = {"activity_id": activity_id, "language_id": c_id}
+        reports = assert_status(admin.get("/admin/reports", params=scope_filters)).text
+        assert 'id="entregas"' in reports and 'id="comparaciones"' not in reports and 'id="grupos"' not in reports
         assert 'href="/admin/aclaraciones"' in reports
         assert "/descargar" not in reports and "/eliminar" not in reports
-        pair_links = PAIR_LINK.findall(reports)
-        assert len(pair_links) == 2 and first_name in reports and second_name in reports
-        search_params = {"activity_id": activity_id, "language_id": c_id, "q": second_name.upper()}
+        comparisons = assert_status(admin.get("/admin/reports", params=dict(scope_filters, vista="comparaciones"))).text
+        assert 'id="comparaciones"' in comparisons and 'id="entregas"' not in comparisons
+        pair_links = PAIR_LINK.findall(comparisons)
+        assert len(pair_links) == 2 and first_name in comparisons and second_name in comparisons
+        search_params = dict(scope_filters, q=second_name.upper())
         filtered_report = assert_status(admin.get("/admin/reports", params=search_params)).text
-        deliveries_html = filtered_report.split('id="entregas"', 1)[1].split('id="comparaciones"', 1)[0]
-        assert "compania.c" in deliveries_html and "primero.c" not in deliveries_html
-        assert len(PAIR_LINK.findall(filtered_report)) == 2 and "3 archivos" in filtered_report
+        assert "compania.c" in filtered_report and "primero.c" not in filtered_report
+        filtered_comparisons = assert_status(admin.get(
+            "/admin/reports", params=dict(search_params, vista="comparaciones"),
+        )).text
+        assert len(PAIR_LINK.findall(filtered_comparisons)) == 2
+        groups_report = assert_status(admin.get("/admin/reports", params=dict(search_params, vista="grupos"))).text
+        assert 'id="grupos"' in groups_report and 'id="entregas"' not in groups_report
+        assert "3 archivos" in groups_report and "primero.c" in groups_report and "compania.c" in groups_report
         filtered_files = assert_status(admin.get("/admin/submissions", params=search_params)).text
         assert "compania.c" in filtered_files and "primero.c" not in filtered_files
         filtered_export = post(admin, "/admin/reports/exportar", admin_csrf, 200, all_results="true", **search_params)
@@ -444,7 +454,7 @@ def main():
                 task.result()
         assert wait_result(first, "par-uno.c", 10000)["similarity_alert"]
         assert wait_result(second, "par-dos.c", 10000)["similarity_alert"]
-        concurrent_report = admin.get("/admin/reports", params={"activity_id": concurrent_id, "language_id": c_id})
+        concurrent_report = admin.get("/admin/reports", params={"activity_id": concurrent_id, "language_id": c_id, "vista": "comparaciones"})
         assert len(PAIR_LINK.findall(assert_status(concurrent_report).text)) == 1
 
         bulk_files = "/admin/submissions/lote"
@@ -534,7 +544,7 @@ def main():
         post(admin, bulk_accounts, admin_csrf, action="enable", selection=ids)
         assert login(first, first_name, student_pw) == "/student"
         preview = post(admin, bulk_accounts, admin_csrf, 200, action="delete", selection=ids)
-        assert "2 cuentas" in preview.text
+        assert "2 cuentas" in preview.text and "data-record-panel" in preview.text
         token = re.search(r'name="token" value="([^"]+)"', preview.text)[1]
         post(admin, bulk_accounts + "/eliminar", admin_csrf, token=token)
         assert_status(first.get("/api/student/submissions"), 401)

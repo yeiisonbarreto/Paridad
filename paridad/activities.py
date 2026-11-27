@@ -2,7 +2,7 @@
 
 from typing import Annotated, Literal
 
-from fastapi import APIRouter, Form, HTTPException, Request
+from fastapi import APIRouter, Form, HTTPException, Query, Request
 from psycopg import errors
 
 from .admin import Code, Csrf, Name, administrator, code_value, optional_threshold, required_text
@@ -59,23 +59,34 @@ def activities(request: Request):
     with request.app.state.pool.connection() as conn:
         user = administrator(conn, request)
         modules = conn.execute("SELECT * FROM modules ORDER BY code").fetchall()
+    return view(request, "activities.html", user=user, modules=modules)
+
+
+@router.get("/modulos/{module_id}")
+def module_detail(request: Request, module_id: int):
+    with request.app.state.pool.connection() as conn:
+        user = administrator(conn, request)
+        module = module_record(conn, module_id)
+        deliveries = conn.execute(
+            "SELECT * FROM activities WHERE module_id = %s ORDER BY code", (module_id,),
+        ).fetchall()
         now = database_time(conn)
-        deliveries = {module["id"]: [] for module in modules}
-        for activity in conn.execute(ACTIVITY_SELECT + " ORDER BY a.code"):
-            group = deliveries.get(activity["module_id"])
-            if group is not None:
-                activity["status"] = delivery_status(activity, now)
-                group.append(activity)
-    return view(request, "activities.html", user=user, modules=modules, deliveries=deliveries)
+        for delivery in deliveries:
+            delivery["status"] = delivery_status(delivery, now)
+    return view(request, "module-detail.html", user=user, module=module, deliveries=deliveries)
 
 
 @router.get("/crear/{kind}")
-def creation_form(request: Request, kind: Literal["modulo", "actividad", "lenguaje"]):
+def creation_form(
+    request: Request, kind: Literal["modulo", "actividad", "lenguaje"],
+    module_id: Annotated[int | None, Query(gt=0, lt=2**63)] = None,
+):
     with request.app.state.pool.connection() as conn:
         user = administrator(conn, request)
         options = form_options(conn) if kind == "actividad" else {}
+        module = module_record(conn, module_id) if kind == "actividad" and module_id is not None else None
     return view(
-        request, "activity-create.html", user=user, kind=kind, **options,
+        request, "activity-create.html", user=user, kind=kind, module=module, **options,
         comment_styles={key: label for key, label in {
             "none": "Sin comentarios", "c": "// y /* … */", "marie": "/", "arm": "//, @, ; y /* … */",
             "vhdl": "--", "hash": "#", "semicolon": ";",
@@ -178,7 +189,7 @@ def create_activity(
         raise HTTPException(409, "Ya existe una actividad con ese código.") from None
     except errors.ForeignKeyViolation:
         raise HTTPException(409, "El módulo cambió. Selecciónalo de nuevo.") from None
-    return redirect(LIST)
+    return redirect(f"{LIST}/modulos/{module_id}")
 
 
 @router.get("/{activity_id}/{operation}")
@@ -226,23 +237,23 @@ def update_activity(
         if exc.diag.constraint_name == "activities_module_id_fkey":
             raise HTTPException(409, "El módulo cambió. Selecciónalo de nuevo.") from None
         raise HTTPException(409, "Ese lenguaje ya tiene entregas en la actividad y debe conservarse.") from None
-    return redirect(LIST)
+    return redirect(f"{LIST}/modulos/{module_id or activity['module_id']}")
 
 
 @router.post("/{activity_id}/estado")
 def set_activity_state(request: Request, activity_id: int, csrf: Csrf, is_open: Annotated[bool, Form()]):
     with request.app.state.pool.connection() as conn:
         administrator(conn, request, csrf)
-        activity_record(conn, activity_id, lock=True)
+        activity = activity_record(conn, activity_id, lock=True)
         conn.execute("UPDATE activities SET is_open = %s WHERE id = %s", (is_open, activity_id))
-    return redirect(LIST)
+    return redirect(f"{LIST}/modulos/{activity['module_id']}")
 
 
 @router.post("/{activity_id}/eliminar")
 def delete_activity(request: Request, activity_id: int, csrf: Csrf):
     with request.app.state.pool.connection() as conn:
         administrator(conn, request, csrf)
-        activity_record(conn, activity_id, lock=True)
+        activity = activity_record(conn, activity_id, lock=True)
         conn.execute(
             "SELECT language_id FROM activity_languages WHERE activity_id = %s ORDER BY language_id FOR UPDATE",
             (activity_id,),
@@ -251,4 +262,4 @@ def delete_activity(request: Request, activity_id: int, csrf: Csrf):
         delete_submissions(conn, ids)
         conn.execute("DELETE FROM activity_languages WHERE activity_id = %s", (activity_id,))
         conn.execute("DELETE FROM activities WHERE id = %s", (activity_id,))
-    return redirect(LIST)
+    return redirect(f"{LIST}/modulos/{activity['module_id']}")

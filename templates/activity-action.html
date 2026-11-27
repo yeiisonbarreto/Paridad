@@ -20,7 +20,7 @@
       <p class="muted">{{ submission_count }} {{ 'archivo asociado' if submission_count == 1 else 'archivos asociados' }}.</p>
     {% endif %}
     <div class="notice-dialog-actions">
-      <a href="/admin/activities" class="button secondary" data-record-close>Cancelar</a>
+      <a href="/admin/activities/modulos/{{ activity.module_id }}" class="button secondary" data-record-action>Cancelar</a>
       <button type="submit" class="button{{ ' danger' if operation == 'eliminar' }}">{{ 'Guardar cambios' if operation == 'editar' else ('Eliminar definitivamente' if operation == 'eliminar' else title) }}</button>
     </div>
   </form>

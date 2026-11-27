@@ -1,0 +1,37 @@
+{% extends "base.html" %}
+{% from "activity-components.html" import delivery_badge %}
+{% block title %}{{ module.code|upper }} · Paridad{% endblock %}
+{% block content %}
+<section class="card stack module-detail" data-record-panel data-record-keep-open>
+  <header class="module-dialog-heading">
+    <h1>{{ module.code|upper }} · {{ module.title }}</h1>
+    <a href="/admin/activities" class="button secondary compact-button" data-record-close>Cerrar</a>
+  </header>
+  <div class="module-actions" role="group" aria-label="Acciones del módulo">
+    <a href="/admin/activities/modulos/{{ module.id }}/editar" class="button secondary compact-button" data-record-action>Modificar módulo</a>
+    <a href="/admin/activities/modulos/{{ module.id }}/eliminar" class="button secondary danger compact-button" data-record-action>Eliminar módulo</a>
+  </div>
+  <div class="module-dialog-heading">
+    <h2>Actividades</h2>
+    <a href="/admin/activities/crear/actividad?module_id={{ module.id }}" class="button compact-button" data-record-action>Crear actividad</a>
+  </div>
+  <ul class="delivery-list">
+    {% for activity in deliveries %}
+    <li class="record-row" data-delivery-id="{{ activity.id }}">
+      <span class="record-summary-text">{{ activity.code|upper }}<small>{{ activity.title }}</small>
+        {% if activity.closes_at %}<small>Cierre {{ activity.closes_at|date_label }}</small>{% endif %}
+      </span>
+      {{ delivery_badge(activity.status) }}
+      <details class="file-menu" data-dropdown>
+        <summary aria-label="Acciones de {{ activity.code|upper }}">Acciones</summary>
+        <div class="file-actions">
+          <a href="/admin/activities/{{ activity.id }}/editar" data-record-action>Modificar</a>
+          <a href="/admin/activities/{{ activity.id }}/estado" data-record-action>{{ 'Cerrar entregas' if activity.is_open else 'Reabrir entregas' }}</a>
+          <a href="/admin/activities/{{ activity.id }}/eliminar" class="text-danger" data-record-action>Eliminar</a>
+        </div>
+      </details>
+    </li>
+    {% else %}<li class="empty">Sin actividades.</li>{% endfor %}
+  </ul>
+</section>
+{% endblock %}

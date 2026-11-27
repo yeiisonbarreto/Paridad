@@ -39,9 +39,9 @@
        decoding="async">
 {% endmacro %}
 
-{% macro bulk_controls(all_label, actions) %}
+{% macro bulk_controls(all_label, actions, show_page=true) %}
   <div class="bulk-scopes">
-    <label class="check" hidden data-page-selection><input type="checkbox" data-bulk-page> Toda esta página</label>
+    {% if show_page %}<label class="check" hidden data-page-selection><input type="checkbox" data-bulk-page> Toda esta página</label>{% endif %}
     <label class="check"><input type="checkbox" name="all_results" value="true" data-bulk-all> {{ all_label }}</label>
   </div>
   <fieldset class="bulk-actions">

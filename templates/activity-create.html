@@ -27,9 +27,10 @@
   {% elif kind == 'actividad' %}
     <form action="/admin/activities" method="post" class="stack">
       {{ csrf(user) }}
-      {{ activity_fields(modules, languages, time_zone) }}
+      {{ activity_fields(modules, languages, time_zone, selected_module=module.id if module else none) }}
       <div class="notice-dialog-actions">
-        <a href="/admin/activities" class="button secondary" data-record-close>Cancelar</a>
+        <a href="/admin/activities{% if module %}/modulos/{{ module.id }}{% endif %}" class="button secondary"
+           {% if module %}data-record-action{% else %}data-record-close{% endif %}>Cancelar</a>
         <button type="submit" class="button">Crear actividad</button>
       </div>
     </form>

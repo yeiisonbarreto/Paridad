@@ -14,7 +14,7 @@
 {% block content %}
 <div class="page-heading">
   {% if overview_id %}<a class="button secondary back-button" href="/admin/submissions/{{ overview_id }}?origen={{ origin }}#comparaciones">Volver a la entrega</a>
-  {% else %}<a class="button secondary back-button" href="/admin/reports#comparaciones">Volver a informes</a>{% endif %}
+  {% else %}<a class="button secondary back-button" href="/admin/reports?vista=comparaciones">Volver a informes</a>{% endif %}
   <h1>Fragmentos coincidentes</h1>
   <p>{{ pair.code }} · {{ pair.language }}</p>
 </div>

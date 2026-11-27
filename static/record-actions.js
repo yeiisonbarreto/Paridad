@@ -7,6 +7,7 @@ if (recordDialog?.showModal) {
   const loading = recordDialog.querySelector("[data-record-loading]");
   let opener;
   let busy = false;
+  let credentialsUrl;
 
   function closeRecord() {
     if (!busy) recordDialog.close();
@@ -20,6 +21,10 @@ if (recordDialog?.showModal) {
   });
   recordDialog.addEventListener("cancel", event => { if (busy) event.preventDefault(); });
   recordDialog.addEventListener("close", () => {
+    if (credentialsUrl) {
+      URL.revokeObjectURL(credentialsUrl);
+      credentialsUrl = undefined;
+    }
     content.replaceChildren();
     opener?.focus({ preventScroll: true });
   });
@@ -52,14 +57,27 @@ if (recordDialog?.showModal) {
         const result = await response.json().catch(() => null);
         throw new Error(result?.detail || "No se pudo completar la acción.");
       }
-      if (response.redirected) {
-        window.location.assign(response.url);
+      if (form?.matches("[data-credentials-import]") &&
+          response.headers.get("content-type")?.startsWith("application/vnd.openxmlformats-officedocument.spreadsheetml.sheet")) {
+        credentialsUrl = URL.createObjectURL(await response.blob());
+        const download = content.querySelector("[data-credentials-download]");
+        download.href = credentialsUrl;
+        form.hidden = true;
+        content.querySelector("[data-credentials-ready]").hidden = false;
+        download.focus();
+        document.querySelector("[data-auto-filters]")?.requestSubmit();
         return;
       }
       const page = new DOMParser().parseFromString(await response.text(), "text/html");
       const panel = page.querySelector("[data-record-panel]");
+      if (response.redirected && !panel?.matches("[data-record-keep-open]")) {
+        window.location.assign(response.url);
+        return;
+      }
       if (!panel) throw new Error("No se pudo abrir la acción.");
       content.replaceChildren(panel);
+      recordDialog.scrollTop = 0;
+      initializeListControls(panel);
       const title = content.querySelector("h1");
       title.id = "record-action-title";
       title.tabIndex = -1;
@@ -98,12 +116,14 @@ if (recordDialog?.showModal) {
 
   document.addEventListener("submit", event => {
     const form = event.target;
-    if (form.matches("form[data-record-action]")) {
+    const submitter = event.submitter;
+    if (form.matches("form[data-record-action]") ||
+        (form.dataset.recordSubmit && submitter?.value === form.dataset.recordSubmit)) {
       event.preventDefault();
-      showRecord(form.action, form, new FormData(form));
+      showRecord(form.getAttribute("action"), submitter || form, new FormData(form, submitter));
     } else if (content.contains(form)) {
       event.preventDefault();
-      if (!busy) loadRecord(form.action, new FormData(form), form);
+      if (!busy) loadRecord(form.getAttribute("action"), new FormData(form), form);
     }
   });
 }

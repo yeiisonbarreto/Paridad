@@ -4,8 +4,8 @@
 {% block content %}
 {% set accounts = kind == 'accounts' %}
 {% set destination = '/admin/accounts' if accounts else '/admin/submissions' %}
-<section class="card narrow">
-  <h1>Eliminar selección</h1>
+<section class="card narrow stack" data-record-panel>
+  <h1>{{ 'Eliminar cuentas' if accounts else 'Eliminar archivos' }}</h1>
   <p>{{ count }} {{ ('cuenta' if count == 1 else 'cuentas') if accounts else ('archivo' if count == 1 else 'archivos') }}</p>
   {% if accounts %}<p>Se eliminarán las cuentas seleccionadas, sus entregas y las comparaciones vinculadas.</p>
   {% else %}<p>Se eliminarán los archivos seleccionados y sus comparaciones.</p>{% endif %}
@@ -13,9 +13,10 @@
   <form action="{{ destination }}/lote/eliminar" method="post">
     {{ csrf(user) }}
     <input type="hidden" name="token" value="{{ token }}">
-    <div class="account-actions">
+    {% if accounts %}<input type="hidden" name="q" value="{{ q }}">{% endif %}
+    <div class="notice-dialog-actions">
+      <a href="{{ destination }}{% if accounts and q %}?q={{ q|urlencode }}{% endif %}" class="button secondary" data-record-close>Cancelar</a>
       <button type="submit" class="button danger">Eliminar definitivamente</button>
-      <a href="{{ destination }}" class="button secondary">Cancelar</a>
     </div>
   </form>
 </section>

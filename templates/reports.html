@@ -3,20 +3,24 @@
 {% from "report-components.html" import results_filters, submission_table %}
 {% block title %}Informes · Paridad{% endblock %}
 {% block content %}
+{% set filters = ('&activity_id=' ~ selected_activity if selected_activity else '')
+    ~ ('&language_id=' ~ selected_language if selected_language else '')
+    ~ ('&alerts_only=true' if alerts_only else '') ~ search_params(q) %}
 <div class="page-heading grade-heading">
   <h1>Informes</h1>
-  <nav class="filter-actions report-links" aria-label="Secciones del informe">
-    <a class="button secondary compact-button" href="#entregas">Entregas</a>
-    <a class="button secondary compact-button" href="#comparaciones">Comparaciones</a>
-    <a class="button secondary compact-button" href="#grupos">Grupos</a>
+  <nav class="report-tabs" aria-label="Vistas de informes" data-report-tabs>
+    {% for key, label in [('entregas', 'Entregas'), ('comparaciones', 'Comparaciones'), ('grupos', 'Grupos')] %}
+    <a href="/admin/reports?vista={{ key }}{{ filters }}" data-report-tab="{{ key }}"{% if tab == key %} aria-current="page"{% endif %}>{{ label }}</a>
+    {% endfor %}
   </nav>
 </div>
-{{ results_filters('/admin/reports', labs, languages, selected_activity, selected_language, q, alerts_only) }}
+{{ results_filters('/admin/reports', labs, languages, selected_activity, selected_language, q, alerts_only, tab) }}
 
 <div data-filter-results>
+{% if tab == "entregas" %}
 <section class="card section-gap report-deliveries" id="entregas" aria-labelledby="deliveries-heading">
   <h2 id="deliveries-heading">Entregas</h2>
-  {% if submissions %}
+  {% if rows %}
   <div class="report-toolbar">
     <form action="/admin/avisos" method="post" id="report-selection" class="bulk-toolbar report-selection" data-bulk-selection data-notice-send>
       {{ csrf(user) }}
@@ -30,16 +34,17 @@
     <button type="submit" form="report-selection" formaction="/admin/reports/exportar" class="button">Descargar Excel</button>
   </div>
   {% endif %}
-  {{ submission_table(submissions, user, selection_form='report-selection') }}
+  {{ submission_table(rows, user, selection_form='report-selection') }}
 </section>
 
+{% elif tab == "comparaciones" %}
 <section class="card section-gap" id="comparaciones" aria-labelledby="comparison-heading">
   <h2 id="comparison-heading">Comparaciones</h2>
-  {% if pairs %}
+  {% if rows %}
   <div class="table-wrap" tabindex="0" role="region" aria-label="Comparaciones entre estudiantes">
     <table>
       <thead><tr><th scope="col">Primera entrega</th><th scope="col">Segunda entrega</th><th scope="col">Actividad y lenguaje</th><th scope="col">Similitud</th><th scope="col">Detalle</th></tr></thead>
-      <tbody>{% for pair in pairs %}
+      <tbody>{% for pair in rows %}
       <tr>
         <td>{{ pair.left_filename }}<span class="table-detail">{{ pair.left_name }} ({{ pair.left_username }})</span></td>
         <td>{{ pair.right_filename }}<span class="table-detail">{{ pair.right_name }} ({{ pair.right_username }})</span></td>
@@ -54,9 +59,10 @@
   {% else %}<p class="empty">Sin comparaciones para estos filtros.</p>{% endif %}
 </section>
 
+{% else %}
 <section class="card section-gap" id="grupos" aria-labelledby="groups-heading">
   <h2 id="groups-heading">Grupos de similitud</h2>
-  {% for group in groups %}
+  {% for group in rows %}
   <details class="record-disclosure">
     <summary>
       <span class="record-summary-text">
@@ -69,6 +75,7 @@
   </details>
   {% else %}<p class="empty">Sin grupos de similitud para estos filtros.</p>{% endfor %}
 </section>
-{{ pagination('/admin/reports', page, has_next, ('&activity_id=' ~ selected_activity if selected_activity else '') ~ ('&language_id=' ~ selected_language if selected_language else '') ~ ('&alerts_only=true' if alerts_only else '') ~ search_params(q)) }}
+{% endif %}
+{{ pagination('/admin/reports', page, has_next, ('&vista=' ~ tab) ~ filters) }}
 </div>
 {% endblock %}

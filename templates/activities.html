@@ -1,5 +1,4 @@
 {% extends "base.html" %}
-{% from "activity-components.html" import delivery_badge %}
 {% block title %}Actividades · Paridad{% endblock %}
 {% block content %}
 <div class="page-heading"><h1>Actividades</h1></div>
@@ -8,46 +7,20 @@
     <h2 id="activity-tools">Agregar</h2>
     <div class="stack creation-buttons">
       <a href="/admin/activities/crear/modulo" class="button secondary" data-record-action aria-haspopup="dialog">Crear módulo</a>
-      <a href="/admin/activities/crear/actividad" class="button secondary" data-record-action aria-haspopup="dialog">Crear actividad</a>
       <a href="/admin/activities/crear/lenguaje" class="button secondary" data-record-action aria-haspopup="dialog">Agregar lenguaje</a>
     </div>
   </aside>
   <section class="card">
     <h2>Módulos</h2>
-    {% for module in modules %}
-    <details class="module-group record-disclosure" name="activity-modules" data-module-id="{{ module.id }}">
-      <summary><span class="record-summary-text">{{ module.code|upper }}<small>{{ module.title }}</small></span></summary>
-      <div class="disclosure-content">
-      <div class="module-actions">
-        <details class="file-menu" data-dropdown>
-          <summary aria-label="Acciones del módulo {{ module.code|upper }}">Acciones</summary>
-          <div class="file-actions">
-            <a href="/admin/activities/modulos/{{ module.id }}/editar" data-record-action>Modificar módulo</a>
-            <a href="/admin/activities/modulos/{{ module.id }}/eliminar" class="text-danger" data-record-action>Eliminar módulo</a>
-          </div>
-        </details>
-      </div>
-      <ul class="delivery-list">
-        {% for activity in deliveries[module.id] %}
-        <li class="record-row" data-delivery-id="{{ activity.id }}">
-          <span class="record-summary-text">{{ activity.code|upper }}<small>{{ activity.title }}</small>
-            {% if activity.closes_at %}<small>Cierre {{ activity.closes_at|date_label }}</small>{% endif %}
-          </span>
-          {{ delivery_badge(activity.status) }}
-          <details class="file-menu" data-dropdown>
-            <summary aria-label="Acciones de {{ activity.code|upper }}">Acciones</summary>
-            <div class="file-actions">
-              <a href="/admin/activities/{{ activity.id }}/editar" data-record-action>Modificar</a>
-              <a href="/admin/activities/{{ activity.id }}/estado" data-record-action>{{ 'Cerrar entregas' if activity.is_open else 'Reabrir entregas' }}</a>
-              <a href="/admin/activities/{{ activity.id }}/eliminar" class="text-danger" data-record-action>Eliminar</a>
-            </div>
-          </details>
-        </li>
-        {% else %}<li class="muted">Sin actividades.</li>{% endfor %}
-      </ul>
-      </div>
-    </details>
-    {% else %}<p class="empty">Aún no hay módulos.</p>{% endfor %}
+    <div class="module-directory">
+      {% for module in modules %}
+      <a href="/admin/activities/modulos/{{ module.id }}" class="module-tile" data-record-action aria-haspopup="dialog"
+         data-module-id="{{ module.id }}">
+        <span class="record-summary-text"><span>{{ module.code|upper }}</span><small>{{ module.title }}</small></span>
+        <span class="module-chevron" aria-hidden="true">›</span>
+      </a>
+      {% else %}<p class="empty">Aún no hay módulos.</p>{% endfor %}
+    </div>
   </section>
 </div>
 {% endblock %}

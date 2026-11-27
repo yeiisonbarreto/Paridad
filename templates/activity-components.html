@@ -1,10 +1,10 @@
 {% from "macros.html" import thresholds %}
-{% macro activity_fields(modules, languages, time_zone, activity=none) %}
+{% macro activity_fields(modules, languages, time_zone, activity=none, selected_module=none) %}
   <label>Módulo
     <select name="module_id" required>
       <option value="">Selecciona un módulo</option>
       {% for module in modules %}
-      <option value="{{ module.id }}"{% if activity and activity.module_id == module.id %} selected{% endif %}>{{ module.code|upper }} · {{ module.title }}</option>
+      <option value="{{ module.id }}"{% if (activity.module_id if activity else selected_module) == module.id %} selected{% endif %}>{{ module.code|upper }} · {{ module.title }}</option>
       {% endfor %}
     </select>
   </label>

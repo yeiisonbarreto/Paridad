@@ -9,7 +9,7 @@ from psycopg.types.json import Jsonb
 from .web import view, wants_json
 
 
-def deletion_preview(conn, request, user, kind: str, targets: list):
+def deletion_preview(conn, request, user, kind: str, targets: list, *, search: str = ""):
     if not targets:
         raise HTTPException(400, "Selecciona al menos un elemento.")
     row = conn.execute(
@@ -20,7 +20,7 @@ def deletion_preview(conn, request, user, kind: str, targets: list):
     if kind == "submissions" and wants_json(request):
         return JSONResponse({"token": str(row["id"]), "count": len(targets)})
     return view(
-        request, "bulk-delete.html", user=user, kind=kind, token=row["id"], count=len(targets),
+        request, "bulk-delete.html", user=user, kind=kind, token=row["id"], count=len(targets), q=search,
     )
 
 

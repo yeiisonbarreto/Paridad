@@ -147,24 +147,30 @@ def group_page(conn, filters, context, page: int, search: str):
 def reports(
     request: Request, activity_id: ContextQuery = "", language_id: ContextQuery = "",
     alerts_only: bool = False, page: Page = 1, q: SearchQuery = "",
+    vista: Literal["entregas", "comparaciones", "grupos"] = "entregas",
 ):
     q = clean_student_search(q)
     with request.app.state.pool.connection() as conn:
-        # Use one snapshot for groups and their members, including during deletions.
-        conn.execute("SET TRANSACTION ISOLATION LEVEL REPEATABLE READ")
+        # Keep the group graph and its loaded member records in one snapshot.
+        if vista == "grupos":
+            conn.execute("SET TRANSACTION ISOLATION LEVEL REPEATABLE READ")
         user = administrator(conn, request)
         filters = filter_choices(conn, activity_id, language_id)
         context = context_params(filters)
-        groups, groups_next = group_page(conn, filters, context, page, q)
-        pairs = conn.execute(
-            PAIR_LIST + PAIR_STUDENT_FILTER + PAIR_ORDER + " LIMIT %s OFFSET %s",
-            (*context, alerts_only, q, q, PAGE_SIZE + 1, (page - 1) * PAGE_SIZE),
-        ).fetchall()
-        submissions = submission_page(conn, context, page, q, alerts_only=alerts_only)
+        if vista == "grupos":
+            rows, has_next = group_page(conn, filters, context, page, q)
+        elif vista == "comparaciones":
+            rows = conn.execute(
+                PAIR_LIST + PAIR_STUDENT_FILTER + PAIR_ORDER + " LIMIT %s OFFSET %s",
+                (*context, alerts_only, q, q, PAGE_SIZE + 1, (page - 1) * PAGE_SIZE),
+            ).fetchall()
+            has_next = len(rows) > PAGE_SIZE
+        else:
+            rows = submission_page(conn, context, page, q, alerts_only=alerts_only)
+            has_next = len(rows) > PAGE_SIZE
     return view(
-        request, "reports.html", user=user, **filters, alerts_only=alerts_only, groups=groups,
-        pairs=pairs[:PAGE_SIZE], submissions=submissions[:PAGE_SIZE], page=page, q=q,
-        has_next=groups_next or len(pairs) > PAGE_SIZE or len(submissions) > PAGE_SIZE,
+        request, "reports.html", user=user, **filters, alerts_only=alerts_only, tab=vista,
+        rows=rows[:PAGE_SIZE], page=page, q=q, has_next=has_next,
     )
 
 

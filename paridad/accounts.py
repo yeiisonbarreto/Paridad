@@ -62,8 +62,15 @@ def accounts(request: Request, page: Page = 1, q: SearchQuery = ""):
         ).fetchall()
     return view(
         request, "accounts.html", user=user, students=students[:PAGE_SIZE],
-        page=page, has_next=len(students) > PAGE_SIZE, roster_limit=MAX_ROSTER_ROWS, q=q,
+        page=page, has_next=len(students) > PAGE_SIZE, q=q,
     )
+
+
+@router.get("/herramientas/{kind}")
+def account_tool(request: Request, kind: Literal["importar", "crear"]):
+    with request.app.state.pool.connection() as conn:
+        user = administrator(conn, request)
+    return view(request, "account-tools.html", user=user, kind=kind, roster_limit=MAX_ROSTER_ROWS)
 
 
 @router.get("/plantilla")
@@ -101,9 +108,14 @@ def import_accounts(request: Request, csrf: Csrf, roster: Annotated[UploadFile, 
         if conflict:
             raise HTTPException(409, f"Fila {conflict.line}: {ACCOUNT_CONFLICT}")
 
-        credentials = [(s.username, s.name, s.email, secrets.token_urlsafe(18)) for s in students]
-        contents = workbook_bytes((*ROSTER_HEADERS, "Contraseña inicial"), credentials)
-        hashes = [(username, name, email, PASSWORDS.hash(password)) for username, name, email, password in credentials]
+        passwords = [secrets.token_urlsafe(18) for _ in students]
+        contents = workbook_bytes(("ID", "Contraseña"), [
+            (student.username, password) for student, password in zip(students, passwords, strict=True)
+        ])
+        hashes = [
+            (student.username, student.name, student.email, PASSWORDS.hash(password))
+            for student, password in zip(students, passwords, strict=True)
+        ]
         try:
             with conn.cursor() as cursor:
                 cursor.executemany(
@@ -174,7 +186,7 @@ def bulk_accounts(
         if not ids:
             raise HTTPException(400, "Selecciona al menos una cuenta.")
         if action == "delete":
-            return deletion_preview(conn, request, user, "accounts", ids)
+            return deletion_preview(conn, request, user, "accounts", ids, search=q)
         active = action == "enable"
         conn.execute("UPDATE users SET active = %s WHERE role = 'STUDENT' AND id = ANY(%s)", (active, ids))
         if not active:
@@ -184,14 +196,17 @@ def bulk_accounts(
 
 
 @router.post("/lote/eliminar")
-def confirm_bulk_account_deletion(request: Request, csrf: Csrf, token: Annotated[UUID, Form()]):
+def confirm_bulk_account_deletion(
+    request: Request, csrf: Csrf, token: Annotated[UUID, Form()], q: SearchForm = "",
+):
+    q = clean_student_search(q)
     with request.app.state.pool.connection() as conn:
         user = administrator(conn, request, csrf)
         selection = [int(item) for item in consume_deletion(conn, user["id"], "accounts", token)]
         ids = selected_students(conn, selection, lock=True)
         if ids:
             remove_student_accounts(conn, ids)
-    return redirect("/admin/accounts")
+    return redirect("/admin/accounts" + ("?" + urlencode({"q": q}) if q else ""))
 
 
 @router.get("/{student_id}/editar")

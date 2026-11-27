@@ -10,7 +10,7 @@
     <label>Código<input name="code" value="{{ module.code|upper }}" maxlength="32" required></label>
     <label>Título<input name="title" value="{{ module.title }}" maxlength="120" required></label>
     <div class="notice-dialog-actions">
-      <a href="/admin/activities" class="button secondary" data-record-close>Cancelar</a>
+      <a href="/admin/activities/modulos/{{ module.id }}" class="button secondary" data-record-action>Cancelar</a>
       <button type="submit" class="button">Guardar cambios</button>
     </div>
   </form>
@@ -19,11 +19,11 @@
   <p>{{ module.code|upper }} · {{ module.title }}</p>
   {% if has_deliveries %}
   <p>Mueve o elimina las actividades del módulo antes de eliminarlo.</p>
-  <a href="/admin/activities" class="button secondary back-button" data-record-close>Volver a actividades</a>
+  <a href="/admin/activities/modulos/{{ module.id }}" class="button secondary back-button" data-record-action>Volver al módulo</a>
   {% else %}
   <form method="post" action="/admin/activities/modulos/{{ module.id }}/eliminar" class="notice-dialog-actions">
     {{ csrf(user) }}
-    <a href="/admin/activities" class="button secondary" data-record-close>Cancelar</a>
+    <a href="/admin/activities/modulos/{{ module.id }}" class="button secondary" data-record-action>Cancelar</a>
     <button type="submit" class="button danger">Eliminar definitivamente</button>
   </form>
   {% endif %}

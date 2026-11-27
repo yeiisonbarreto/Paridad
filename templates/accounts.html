@@ -6,33 +6,10 @@
 <div class="management-layout">
   <aside class="card" aria-labelledby="account-tools">
     <h2 id="account-tools">Agregar estudiantes</h2>
-    <details class="record-disclosure" name="account-tools">
-      <summary>Importar estudiantes</summary>
-      <div class="disclosure-content">
-        <p class="muted">Completa ID, Nombre y Correo. Para conservar ceros iniciales, guarda el ID como texto.</p>
-        <p><a href="/admin/accounts/plantilla">Descargar plantilla Excel</a></p>
-        <form action="/admin/accounts/importar" method="post" enctype="multipart/form-data" class="stack record-form">
-          {{ csrf(user) }}
-          <label>Lista de estudiantes
-            <input type="file" name="roster" accept=".xlsx" required aria-describedby="roster-help">
-          </label>
-          <p class="field-help" id="roster-help">.xlsx de hasta 128 KiB y {{ roster_limit }} filas.</p>
-          <button type="submit" class="button">Importar y descargar credenciales</button>
-          <p class="field-help">Guarda la descarga y recarga la página para ver las nuevas cuentas.</p>
-        </form>
-      </div>
-    </details>
-    <details class="record-disclosure" name="account-tools">
-      <summary>Crear cuenta individual</summary>
-      <form action="/admin/accounts" method="post" class="stack record-form">
-        {{ csrf(user) }}
-        <label>Usuario<input name="username" maxlength="64" required autocomplete="off"></label>
-        <label>Nombre completo<input name="display_name" maxlength="120" required></label>
-        <label>Correo electrónico (opcional)<input type="email" name="email" maxlength="254"></label>
-        <label>Contraseña asignada<input type="password" name="password" minlength="12" maxlength="128" required autocomplete="new-password"></label>
-        <button type="submit" class="button">Crear estudiante</button>
-      </form>
-    </details>
+    <div class="stack creation-buttons">
+      <a href="/admin/accounts/herramientas/importar" class="button secondary" data-record-action aria-haspopup="dialog">Importar estudiantes</a>
+      <a href="/admin/accounts/herramientas/crear" class="button secondary" data-record-action aria-haspopup="dialog">Crear cuenta individual</a>
+    </div>
   </aside>
   <section class="card">
     <h2>Gestionar cuentas</h2>
@@ -42,10 +19,10 @@
     </form>
     <div data-filter-results>
     {% if students %}
-    <form action="/admin/accounts/lote" method="post" id="account-selection" class="bulk-toolbar" data-bulk-selection>
+    <form action="/admin/accounts/lote" method="post" id="account-selection" class="bulk-toolbar" data-bulk-selection data-record-submit="delete">
       {{ csrf(user) }}
       <input type="hidden" name="q" value="{{ q }}">
-      {{ bulk_controls('Todas las cuentas del filtro' if q else 'Todas las cuentas', [('disable', 'Inhabilitar'), ('enable', 'Reactivar'), ('delete', 'Eliminar')]) }}
+      {{ bulk_controls('Todas', [('disable', 'Inhabilitar'), ('enable', 'Reactivar'), ('delete', 'Eliminar')], show_page=false) }}
     </form>
     {% endif %}
     {% for student in students %}

@@ -4,7 +4,7 @@
 {% block title %}{{ submission.filename }} · Paridad{% endblock %}
 {% block content %}
 <div class="page-heading">
-  {% if origin == 'informes' %}<a class="button secondary back-button" href="/admin/reports#entregas">Volver a informes</a>
+  {% if origin == 'informes' %}<a class="button secondary back-button" href="/admin/reports">Volver a informes</a>
   {% else %}<a class="button secondary back-button" href="/admin/submissions">Volver a archivos</a>{% endif %}
   <h1>{{ submission.filename }}</h1>
   <p>{{ submission.display_name }} ({{ submission.username }}) · {{ submission.code }} · {{ submission.language }}</p>

@@ -72,18 +72,20 @@ function initializeListControls(root) {
     const all = form.querySelector("[data-bulk-all]");
     const items = Array.from(form.elements).filter(item => item.hasAttribute("data-bulk-item"));
     const actions = form.querySelectorAll('button[type="submit"]');
-    form.querySelector("[data-page-selection]").hidden = false;
+    if (page) form.querySelector("[data-page-selection]").hidden = false;
 
     function updateSelection() {
       const count = items.filter(item => item.checked).length;
-      page.checked = all.checked || count === items.length;
-      page.indeterminate = !all.checked && count > 0 && count < items.length;
-      page.disabled = all.checked;
+      if (page) {
+        page.checked = all.checked || count === items.length;
+        page.indeterminate = !all.checked && count > 0 && count < items.length;
+        page.disabled = all.checked;
+      }
       for (const item of items) item.disabled = all.checked;
       for (const action of actions) action.disabled = !all.checked && count === 0;
     }
 
-    page.addEventListener("change", () => {
+    page?.addEventListener("change", () => {
       for (const item of items) item.checked = page.checked;
       updateSelection();
     });
@@ -102,6 +104,7 @@ const resultsRegion = document.querySelector("[data-filter-results]");
 if (filterForm && resultsRegion) {
   const status = filterForm.querySelector("[data-filter-status]");
   const search = filterForm.elements.q;
+  const reportTabs = document.querySelector("[data-report-tabs]");
   let pending;
   let delay;
 
@@ -126,6 +129,14 @@ if (filterForm && resultsRegion) {
       if (pending !== request) return;
       resultsRegion.replaceChildren(...replacement.childNodes);
       initializeListControls(resultsRegion);
+      if (reportTabs) {
+        for (const link of reportTabs.querySelectorAll("[data-report-tab]")) {
+          const updated = page.querySelector(`[data-report-tab="${link.dataset.reportTab}"]`);
+          link.href = updated.getAttribute("href");
+          if (updated.hasAttribute("aria-current")) link.setAttribute("aria-current", "page");
+          else link.removeAttribute("aria-current");
+        }
+      }
       history.replaceState(null, "", url);
       resultsRegion.inert = false;
       status.textContent = "";
@@ -146,6 +157,14 @@ if (filterForm && resultsRegion) {
     if (wait) delay = window.setTimeout(applyFilters, wait);
     else applyFilters();
   }
+
+  reportTabs?.addEventListener("click", event => {
+    const link = event.target.closest("[data-report-tab]");
+    if (!link || event.ctrlKey || event.metaKey || event.shiftKey || event.altKey) return;
+    event.preventDefault();
+    filterForm.elements.vista.value = link.dataset.reportTab;
+    scheduleFilters(0);
+  });
 
   filterForm.addEventListener("submit", event => {
     event.preventDefault();
