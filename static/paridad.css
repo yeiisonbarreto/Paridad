@@ -504,3 +504,18 @@ code { font: 0.85rem/1.55 ui-monospace, "Cascadia Code", monospace; }
 .notice-toast:empty { opacity: 0; }
 .notice-toast[data-kind="success"] { border-inline-start: 4px solid var(--positive-text); }
 .notice-toast[data-kind="error"] { border-inline-start: 4px solid var(--alert-text); }
+
+.login-brand { display: grid; justify-items: center; margin-block-end: 1rem; }
+.login-logo { width: min(100%, 17rem); height: auto; max-block-size: 8rem; object-fit: contain; }
+.login-brand .login-wordmark { margin: 0; }
+.section-links #admin-clarification-count { margin-inline-start: 0.24rem; }
+.notice-thread-heading { display: flex; flex-wrap: wrap; gap: 0.4rem; align-items: baseline; }
+.notice-thread { list-style: none; padding: 0; margin: 0.65rem 0 0; }
+.notice-thread > li {
+  padding: 0.7rem 0.8rem; margin-block-start: 0.65rem; border-radius: 0.45rem;
+  border: 1px solid var(--line); border-inline-start: 3px solid var(--brand);
+}
+.notice-thread > li time { display: block; margin-block-end: 0.45rem; }
+.notice-thread-fields { margin: 0; display: grid; gap: 0.45rem; }
+.notice-thread-fields dt { color: var(--muted); font-size: 0.82rem; }
+.notice-thread-fields dd { margin: 0; overflow-wrap: anywhere; }

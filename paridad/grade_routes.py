@@ -4,17 +4,19 @@ from typing import Annotated, Literal
 from uuid import UUID
 
 from fastapi import APIRouter, Form, HTTPException, Request
+from starlette.responses import JSONResponse
 
 from .admin import Csrf, PAGE_SIZE, Page, administrator
+from .notices import publish_clarification
 from .security import auth_user, check_csrf
-from .web import redirect, view
+from .web import redirect, templates, view, wants_json
 
 router = APIRouter()
 
 GRADE_SELECT = """
     SELECT s.id, s.filename, a.code AS activity, s.state, s.rubric, s.automatic_grade,
            s.quality_points, s.grade_override, s.grade_note, c.reason, c.comments, c.grade_at_request,
-           c.status AS clarification_status, c.response, c.created_at, c.resolved_at
+           c.status AS clarification_status, c.response, c.created_at, c.resolved_at, c.grade_at_resolution
     FROM submissions s JOIN activities a ON a.id = s.activity_id
     LEFT JOIN grade_clarifications c ON c.submission_id = s.id
 """
@@ -68,7 +70,15 @@ def request_clarification(
         ).fetchone()
         if not row:
             raise HTTPException(409, "Ya solicitaste una aclaración para este archivo.")
-    return redirect(f"/student/submissions/{submission_id}/nota")
+        publish_clarification(conn, submission_id)
+        if wants_json(request):
+            updated = get_grade(conn, submission_id, student_id=user["id"])
+            user = auth_user(conn, request, "STUDENT")
+            return JSONResponse({
+                "unread": user["unread_notices"], "newest_notice": user["newest_notice"],
+                "content": templates.get_template("student-clarification-status.html").render(grade=updated),
+            })
+    return redirect(f"/student/submissions/{submission_id}/nota#aclaracion")
 
 
 @router.get("/admin/aclaraciones")
@@ -88,6 +98,13 @@ def clarification_list(request: Request, page: Page = 1, state: Literal["pending
                 page=page, has_next=len(requests) > PAGE_SIZE, filter_state=state)
 
 
+@router.get("/api/admin/aclaraciones/pendientes")
+def pending_clarifications(request: Request):
+    with request.app.state.pool.connection() as conn:
+        user = administrator(conn, request)
+    return {"pending": user["pending_clarifications"]}
+
+
 @router.post("/admin/submissions/{submission_id}/aclaracion")
 def decide_clarification(
     request: Request, submission_id: UUID, csrf: Csrf,
@@ -96,19 +113,25 @@ def decide_clarification(
 ):
     with request.app.state.pool.connection() as conn:
         administrator(conn, request, csrf)
-        get_grade(conn, submission_id, lock=True)
+        current = get_grade(conn, submission_id, lock=True)
+        final_grade = grade if grade is not None else (
+            current["grade_override"] if current["grade_override"] is not None else current["automatic_grade"]
+        )
         explanation = comment_text(response, required=True)
         clarified = conn.execute(
-            """UPDATE grade_clarifications SET status = %s, response = %s, resolved_at = now()
+            """UPDATE grade_clarifications SET status = %s, response = %s,
+                      resolved_at = GREATEST(clock_timestamp(), created_at + interval '1 microsecond'),
+                      grade_at_resolution = %s
                WHERE submission_id = %s AND status = 'pending' RETURNING submission_id""",
-            (decision, explanation, submission_id),
+            (decision, explanation, final_grade, submission_id),
         ).fetchone()
         if not clarified:
             raise HTTPException(409, "La solicitud ya fue atendida o no existe.")
         if grade is not None:
             conn.execute("UPDATE submissions SET grade_override = %s, grade_note = %s WHERE id = %s",
                          (grade, explanation, submission_id))
-    return redirect(f"/admin/submissions/{submission_id}#aclaracion")
+        publish_clarification(conn, submission_id)
+    return redirect(f"/admin/submissions/{submission_id}?respuesta=enviada#aclaracion")
 
 
 @router.post("/admin/submissions/{submission_id}/nota")

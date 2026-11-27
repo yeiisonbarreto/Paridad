@@ -120,3 +120,39 @@ if (sendNoticeDialog?.showModal) {
     }
   });
 }
+
+const clarificationCounter = document.querySelector("#admin-clarification-count");
+if (clarificationCounter) {
+  const value = clarificationCounter.querySelector("[data-clarification-count]");
+  const requests = document.querySelector("#clarification-requests");
+  let pollingClarifications = false;
+
+  window.setInterval(async () => {
+    if (pollingClarifications || document.hidden) return;
+    pollingClarifications = true;
+    try {
+      const response = await fetch(requests ? window.location.href : "/api/admin/aclaraciones/pendientes",
+        { cache: "no-store" });
+      if (!response.ok || response.redirected) return;
+      let pending;
+      if (requests) {
+        const page = new DOMParser().parseFromString(await response.text(), "text/html");
+        pending = Number(page.querySelector("[data-clarification-count]")?.textContent);
+        const updated = page.querySelector("#clarification-requests");
+        if (updated && !requests.contains(document.activeElement) && requests.innerHTML !== updated.innerHTML) {
+          requests.innerHTML = updated.innerHTML;
+        }
+      } else {
+        pending = (await response.json()).pending;
+      }
+      if (!Number.isInteger(pending)) return;
+      if (pending > Number(value.textContent)) playNoticeSound("receive");
+      if (value.textContent !== String(pending)) value.textContent = pending;
+      clarificationCounter.hidden = pending === 0;
+    } catch {
+      // Retry the refresh on the next interval.
+    } finally {
+      pollingClarifications = false;
+    }
+  }, 8000);
+}

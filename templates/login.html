@@ -1,10 +1,11 @@
 {% extends "base.html" %}
+{% from "macros.html" import paridad_mark %}
 {% block title %}Inicio de sesión · Paridad{% endblock %}
 {% block body_class %}login-page{% endblock %}
 {% block header %}{% endblock %}
 {% block content %}
 <section class="card login-form" aria-labelledby="login-heading">
-  <p class="login-wordmark">Paridad</p>
+  <div class="login-brand">{{ paridad_mark('login-logo', 'login-wordmark') }}</div>
   <h1 id="login-heading">Inicio de sesión</h1>
   {% if error %}<p class="callout alert" role="alert">{{ error }}</p>{% endif %}
   <form action="/login" method="post" class="stack">

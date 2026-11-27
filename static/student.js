@@ -52,8 +52,8 @@ if (document.querySelector("[data-deterrence]")) {
 const noticeCounter = document.querySelector("#student-notice-count");
 const studentNoticeDialog = document.querySelector("#student-notice-dialog");
 let newestNotice = Number(noticeCounter?.dataset.newest || 0);
-let pendingNoticeReads = 0;
-let noticeReadRevision = 0;
+let pendingNoticeActions = 0;
+let noticeVersion = 0;
 let noticeReadQueue = Promise.resolve();
 
 function setUnreadCount(count) {
@@ -61,6 +61,36 @@ function setUnreadCount(count) {
   noticeCounter.querySelector(".notice-count").hidden = count === 0;
   const value = noticeCounter.querySelector("[data-unread-count]");
   if (value.textContent !== String(count)) value.textContent = count;
+}
+
+const clarificationForm = document.querySelector("[data-request-clarification]");
+if (clarificationForm) {
+  const clarificationPanel = clarificationForm.closest(".clarification-card");
+  const errorMessage = clarificationForm.querySelector("[data-clarification-error]");
+  const submit = clarificationForm.querySelector('button[type="submit"]');
+
+  clarificationForm.addEventListener("submit", async event => {
+    event.preventDefault();
+    if (submit.disabled) return;
+    submit.disabled = true;
+    errorMessage.hidden = true;
+    pendingNoticeActions++;
+    noticeVersion++;
+    try {
+      const result = await noticeRequest(clarificationForm.getAttribute("action"), new FormData(clarificationForm));
+      clarificationPanel.innerHTML = result.content;
+      clarificationPanel.querySelector("h2").focus();
+      setUnreadCount(result.unread);
+      newestNotice = Math.max(newestNotice, result.newest_notice);
+      playNoticeSound("receive");
+    } catch (error) {
+      errorMessage.textContent = error.message || "No se pudo enviar la solicitud. Inténtelo de nuevo.";
+      errorMessage.hidden = false;
+    } finally {
+      pendingNoticeActions--;
+      submit.disabled = false;
+    }
+  });
 }
 
 if (studentNoticeDialog?.showModal) {
@@ -80,15 +110,25 @@ if (studentNoticeDialog?.showModal) {
     studentNoticeDialog.dataset.openNotice = noticeId;
     studentNoticeDialog.showModal();
     content.querySelector("h2").focus();
-    if (!form.hasAttribute("data-unread") || form.hasAttribute("aria-busy")) return;
+    const needsRefresh = form.hasAttribute("data-unread") || form.hasAttribute("data-refresh-thread");
+    if (!needsRefresh || form.hasAttribute("aria-busy")) return;
 
     const body = new FormData(form);
     form.setAttribute("aria-busy", "true");
-    pendingNoticeReads++;
-    noticeReadRevision++;
+    pendingNoticeActions++;
+    noticeVersion++;
     noticeReadQueue = noticeReadQueue.then(async () => {
       try {
         const result = await noticeRequest(form.getAttribute("action"), body);
+        if (result.content && studentNoticeDialog.open && studentNoticeDialog.dataset.openNotice === noticeId) {
+          const restoreFocus = content.contains(document.activeElement);
+          if (content.innerHTML.trim() !== result.content.trim()) {
+            content.innerHTML = result.content;
+            if (restoreFocus) content.querySelector("h2").focus();
+          }
+          if (result.activity_tick > newestNotice) playNoticeSound("receive");
+          newestNotice = Math.max(newestNotice, result.activity_tick);
+        }
         form.removeAttribute("data-unread");
         form.closest(".notice-entry").classList.remove("notice-unread");
         form.querySelector("[data-notice-new]")?.remove();
@@ -99,7 +139,7 @@ if (studentNoticeDialog?.showModal) {
           readError.hidden = false;
         }
       } finally {
-        pendingNoticeReads--;
+        pendingNoticeActions--;
         form.removeAttribute("aria-busy");
       }
     });
@@ -108,9 +148,9 @@ if (studentNoticeDialog?.showModal) {
 
 let polling = false;
 window.setInterval(async () => {
-  if (polling || document.hidden || pendingNoticeReads) return;
+  if (polling || document.hidden || pendingNoticeActions) return;
   polling = true;
-  const revision = noticeReadRevision;
+  const revision = noticeVersion;
   try {
     const response = await fetch(window.location.href, { cache: "no-store" });
     if (response.redirected) {
@@ -119,7 +159,7 @@ window.setInterval(async () => {
     }
     if (!response.ok) return;
     const next = new DOMParser().parseFromString(await response.text(), "text/html");
-    if (revision !== noticeReadRevision) return;
+    if (revision !== noticeVersion) return;
 
     const updatedCounter = next.querySelector("#student-notice-count");
     if (updatedCounter) {
@@ -129,13 +169,21 @@ window.setInterval(async () => {
       newestNotice = Math.max(newestNotice, latest);
       setUnreadCount(count);
     }
-    for (const selector of [".history", "#notice-inbox"]) {
+    for (const selector of [".history", "#notice-inbox", ".clarification-card"]) {
       if (selector === "#notice-inbox" && studentNoticeDialog?.open) continue;
       const current = document.querySelector(selector);
       const updated = next.querySelector(selector);
-      if (current && updated && current.innerHTML !== updated.innerHTML &&
-          !current.contains(document.activeElement)) {
-        current.innerHTML = updated.innerHTML;
+      if (!current || !updated || current.innerHTML === updated.innerHTML ||
+          current.querySelector("[data-request-clarification]")) continue;
+      const active = document.activeElement;
+      const focusedNotice = selector === "#notice-inbox" && active.closest("[data-notice-open]");
+      if (current.contains(active) && !focusedNotice) continue;
+      const focusedId = focusedNotice ? focusedNotice.elements.notice_id.value : null;
+      current.innerHTML = updated.innerHTML;
+      if (focusedId) {
+        const matchingNotice = Array.from(current.querySelectorAll("[data-notice-open]"))
+          .find(form => form.elements.notice_id.value === focusedId);
+        matchingNotice?.querySelector("button").focus({ preventScroll: true });
       }
     }
   } catch {

@@ -1,34 +1,81 @@
 {% from "macros.html" import paridad_mark %}
+{% from "grade-components.html" import clarification_status %}
 
-{% macro notice_title(notice) %}{{ 'Revisa esta entrega' if notice.submission_id else 'Revisa tus entregas' }}{% endmacro %}
+{% macro notice_title(notice) -%}
+  {% if notice.clarification_id %}Aclaración de nota
+  {%- elif notice.submission_id %}Revisión académica de la entrega
+  {%- else %}Revisa tus entregas{% endif %}
+{%- endmacro %}
 
 {% macro activity_label(delivery) -%}
   {{ delivery.activity }}{% if delivery.activity_code != delivery.activity %} ({{ delivery.activity_code }}){% endif %}
 {%- endmacro %}
+
+{% macro delivery_fields(notice) %}
+<dl class="notice-delivery-fields">
+  <div><dt>Archivo</dt><dd>{{ notice.filename }}</dd></div>
+  <div><dt>Actividad</dt><dd>{{ activity_label(notice) }}</dd></div>
+  <div><dt>Lenguaje</dt><dd>{{ notice.language }}</dd></div>
+</dl>
+{% endmacro %}
+
+{% macro clarification_thread(notice) %}
+<section class="notice-detail-section">
+  <div class="notice-thread-heading">
+    <h3>Seguimiento de la solicitud</h3>
+    {{ clarification_status(notice.clarification_status) }}
+  </div>
+  <ol class="notice-thread">
+    <li>
+      <h3>Solicitud recibida</h3>
+      <time class="table-detail" datetime="{{ notice.created_at.isoformat() }}">{{ notice.created_at|date_label }}</time>
+      <p>El equipo docente recibió su solicitud de aclaración para esta entrega.
+        {% if not notice.resolved_at %}Revisará el motivo presentado y comunicará la decisión en este mismo hilo.{% endif %}</p>
+      <dl class="notice-thread-fields">
+        <div><dt>Nota al solicitar la aclaración</dt><dd>{{ notice.grade_at_request }} / 50</dd></div>
+        <div><dt>Motivo de su solicitud</dt><dd class="feedback-text">{{ notice.reason }}</dd></div>
+        {% if notice.comments %}<div><dt>Comentarios adicionales</dt><dd class="feedback-text">{{ notice.comments }}</dd></div>{% endif %}
+      </dl>
+    </li>
+    {% if notice.resolved_at %}
+    <li>
+      <h3>{{ 'Resolución docente' if notice.clarification_status == 'resolved' else 'Solicitud rechazada' }}</h3>
+      <time class="table-detail" datetime="{{ notice.resolved_at.isoformat() }}">{{ notice.resolved_at|date_label }}</time>
+      <p>El equipo docente concluyó la revisión de su solicitud.</p>
+      <dl class="notice-thread-fields">
+        <div><dt>Respuesta docente</dt><dd class="feedback-text">{{ notice.response }}</dd></div>
+        {% if notice.grade_at_resolution is not none %}
+        <div><dt>Nota al concluir la revisión</dt><dd>{{ notice.grade_at_resolution }} / 50</dd></div>
+        {% endif %}
+      </dl>
+    </li>
+    {% endif %}
+  </ol>
+</section>
+{% endmacro %}
 
 {% macro notice_content(notice, heading_id) %}
 <div class="notice-identity">{{ paridad_mark('notice-logo', 'notice-wordmark') }}</div>
 <div class="notice-detail-header">
   <h2 id="{{ heading_id }}" tabindex="-1">{{ notice_title(notice) }}</h2>
   <p class="notice-byline">
-    <span>{{ 'Aviso automático' if notice.submission_id else 'Aviso docente' }}</span>
-    <time datetime="{{ notice.created_at.isoformat() }}">{{ notice.created_at|date_label }}</time>
+    <span>Equipo docente de la asignatura</span>
+    <time datetime="{{ notice.activity_at.isoformat() }}">{{ notice.activity_at|date_label }}</time>
   </p>
 </div>
-{% if notice.submission_id %}
-  <dl class="notice-delivery-fields">
-    <div><dt>Archivo</dt><dd>{{ notice.filename }}</dd></div>
-    <div><dt>Actividad</dt><dd>{{ activity_label(notice) }}</dd></div>
-    <div><dt>Lenguaje</dt><dd>{{ notice.language }}</dd></div>
-  </dl>
+{% if notice.clarification_id %}
+  {{ delivery_fields(notice) }}
+  {{ clarification_thread(notice) }}
+{% elif notice.submission_id %}
+  {{ delivery_fields(notice) }}
   <section class="notice-detail-section">
     <h3>Motivo del aviso</h3>
     {% if notice.similarity and notice.ai %}
-    <p>La similitud y el indicio de IA sin declarar superaron sus umbrales de revisión.</p>
+    <p>El análisis de su entrega registró una similitud y un indicio de IA sin declarar por encima de los umbrales de revisión de esta actividad.</p>
     {% elif notice.similarity %}
-    <p>La similitud superó el umbral de revisión.</p>
+    <p>La similitud superó el umbral de revisión de esta actividad durante el análisis de su entrega.</p>
     {% else %}
-    <p>El indicio de IA sin declarar superó el umbral de revisión.</p>
+    <p>El análisis de su entrega registró un indicio de IA sin declarar por encima del umbral de revisión de esta actividad.</p>
     {% endif %}
     {% if notice.similarity_at_notice_bp is not none or notice.ai_at_notice_bp is not none %}
     <dl class="notice-metrics">
@@ -42,11 +89,11 @@
       {% endif %}
     </dl>
     {% endif %}
-    <p class="muted">El resultado requiere revisión del equipo docente.</p>
+    <p class="muted">El equipo docente revisará estos resultados junto con el contexto académico de su entrega antes de emitir una decisión.</p>
   </section>
 {% else %}
   <section class="notice-detail-section">
-    <p>El equipo docente te invita a revisar el resultado de tus entregas.</p>
+    <p>El equipo docente le solicita revisar el resultado del análisis de sus entregas y las observaciones disponibles.</p>
     {% if notice.related_deliveries %}
     <h3>Entregas por revisar</h3>
     <ul class="notice-deliveries">
@@ -57,8 +104,10 @@
     {% endif %}
   </section>
 {% endif %}
+{% if not notice.clarification_id %}
 <section class="notice-detail-section notice-next">
-  <h3>Qué puedes hacer</h3>
-  <p>Consulta el análisis en Mis entregas. Si tienes dudas sobre la nota, puedes pedir una aclaración desde su detalle.</p>
+  <h3>Qué puede hacer</h3>
+  <p>Consulte el análisis en Mis entregas. Si necesita una aclaración sobre la nota, puede solicitarla desde el detalle de la entrega.</p>
 </section>
+{% endif %}
 {% endmacro %}

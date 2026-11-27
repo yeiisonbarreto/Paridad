@@ -62,6 +62,9 @@
   {% if grade.clarification_status %}
   <section class="card" id="aclaracion">
     <h2>Aclaración solicitada</h2>
+    {% if request.query_params.get("respuesta") == "enviada" and grade.response %}
+    <p class="callout" role="status">Respuesta enviada al hilo del estudiante.</p>
+    {% endif %}
     {{ clarification_content(grade) }}
     {% if grade.clarification_status == 'pending' %}
     <form class="stack" action="/admin/submissions/{{ grade.id }}/aclaracion" method="post">
@@ -73,8 +76,8 @@
         <input type="number" name="grade" min="0" max="50">
       </label>
       <div class="filter-actions">
-        <button class="button" name="decision" value="resolved" type="submit">Resolver</button>
-        <button class="button secondary" name="decision" value="rejected" type="submit">Rechazar</button>
+        <button class="button" name="decision" value="resolved" type="submit">Enviar resolución</button>
+        <button class="button secondary" name="decision" value="rejected" type="submit">Enviar rechazo</button>
       </div>
     </form>
     {% endif %}

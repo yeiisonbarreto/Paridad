@@ -1,0 +1,6 @@
+{% from "grade-components.html" import clarification_content %}
+<h2 tabindex="-1">Aclaración</h2>
+{% if grade.clarification_status == 'pending' %}
+<p class="callout" role="status">Solicitud recibida. El equipo docente revisará el motivo y enviará su respuesta al mismo hilo en Avisos.</p>
+{% endif %}
+{{ clarification_content(grade) }}

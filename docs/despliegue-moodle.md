@@ -28,6 +28,8 @@ El perfil TLS publica HTTPS. Coordina la emisión y renovación de certificados 
 
 En **Informes**, selecciona entregas y pulsa **Enviar aviso** y confirma para publicar un mensaje por estudiante. La confirmación aparece en la misma página. El menú **Acciones** de Archivos permite hacerlo para uno solo. Paridad omite las cuentas inactivas y evita publicar avisos manuales repetidos al mismo estudiante en un minuto. La migración conserva los avisos anteriores en la bandeja, inicialmente como pendientes de lectura. Los sonidos de envío y recepción se activan al interactuar con la página y dependen de la configuración de audio del navegador.
 
+Una solicitud de aclaración genera una confirmación de recepción. Cuando el equipo docente envía su decisión desde **Aclaraciones**, Paridad actualiza el mismo hilo y lo marca como pendiente de lectura. El hilo muestra el motivo original, la respuesta y las notas registradas al solicitar y resolver. El menú del panel docente indica cuántas aclaraciones están pendientes.
+
 En **Cuentas**, abre una cuenta activa y usa **Generar enlace de invitación** para obtener un enlace personal que caduca en 24 horas. Generar otro enlace invalida el anterior. Usarlo, cambiar el correo, restablecer la contraseña o inhabilitar la cuenta también lo invalida.
 
 Al actualizar una instalación existente, añade `--remove-orphans` al comando de arranque de Compose para retirar los servicios obsoletos del proyecto y conserva su `.env` y sus datos de PostgreSQL.

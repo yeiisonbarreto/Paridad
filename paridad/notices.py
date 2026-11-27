@@ -8,16 +8,19 @@ from starlette.responses import JSONResponse
 
 from .admin import Csrf, PAGE_SIZE, Page
 from .security import auth_user, check_csrf
-from .web import redirect, view, wants_json
+from .web import redirect, templates, view, wants_json
 
 router = APIRouter(prefix="/student/avisos")
 InboxPage = Annotated[int, Form(ge=1, le=10000)]
 OWN_NOTICES = """
-    SELECT n.id, n.submission_id, n.similarity, n.ai, n.created_at, n.read_at,
+    SELECT n.id, n.submission_id, n.clarification_id, n.similarity, n.ai, n.created_at, n.read_at, n.activity_at,
+           (extract(epoch FROM n.activity_at) * 1000000)::bigint AS activity_tick,
+           c.status AS clarification_status, c.reason, c.comments, c.response,
+           c.grade_at_request, c.grade_at_resolution, c.resolved_at,
            n.similarity_at_notice_bp, n.similarity_threshold_at_notice,
            n.ai_at_notice_bp, n.ai_threshold_at_notice,
            s.filename, a.code AS activity_code, a.title AS activity, l.name AS language,
-           CASE WHEN n.submission_id IS NULL THEN (
+           CASE WHEN n.submission_id IS NULL AND n.clarification_id IS NULL THEN (
                SELECT jsonb_agg(jsonb_build_object('filename', own.filename, 'activity', act.title,
                                                    'activity_code', act.code, 'language', lang.name)
                                 ORDER BY own.created_at DESC, own.id)
@@ -27,7 +30,8 @@ OWN_NOTICES = """
                WHERE own.student_id = n.student_id AND own.id = ANY(n.related_submission_ids)
            ) END AS related_deliveries
     FROM review_notices n
-    LEFT JOIN submissions s ON s.id = n.submission_id AND s.student_id = n.student_id
+    LEFT JOIN submissions s ON s.id = COALESCE(n.submission_id, n.clarification_id) AND s.student_id = n.student_id
+    LEFT JOIN grade_clarifications c ON c.submission_id = n.clarification_id AND c.submission_id = s.id
     LEFT JOIN activities a ON a.id = s.activity_id
     LEFT JOIN languages l ON l.id = s.language_id
     WHERE n.student_id = %s
@@ -78,7 +82,7 @@ def publish_manual(conn, submission_ids: list[UUID]) -> int:
            SELECT s.student_id, array_agg(s.id ORDER BY s.created_at DESC, s.id)
            FROM submissions s JOIN users u ON u.id = s.student_id
            WHERE s.id = ANY(%s) AND u.role = 'STUDENT' AND u.active AND NOT EXISTS (
-                 SELECT 1 FROM review_notices n WHERE n.student_id = u.id AND n.submission_id IS NULL
+                 SELECT 1 FROM review_notices n WHERE n.student_id = u.id AND n.submission_id IS NULL AND n.clarification_id IS NULL
                    AND n.created_at > now() - interval '1 minute'
              )
            GROUP BY s.student_id""",
@@ -86,12 +90,25 @@ def publish_manual(conn, submission_ids: list[UUID]) -> int:
     ).rowcount
 
 
+def publish_clarification(conn, submission_id: UUID) -> None:
+    conn.execute(
+        """INSERT INTO review_notices (student_id, clarification_id, created_at, activity_at)
+           SELECT s.student_id, c.submission_id, c.created_at, COALESCE(c.resolved_at, c.created_at)
+           FROM grade_clarifications c JOIN submissions s ON s.id = c.submission_id
+           WHERE c.submission_id = %s
+           ON CONFLICT (clarification_id) WHERE clarification_id IS NOT NULL
+           DO UPDATE SET activity_at = EXCLUDED.activity_at, read_at = NULL
+           WHERE review_notices.activity_at < EXCLUDED.activity_at""",
+        (submission_id,),
+    )
+
+
 @router.get("")
 def inbox(request: Request, page: Page = 1):
     with request.app.state.pool.connection() as conn:
         user = auth_user(conn, request, "STUDENT")
         notices = conn.execute(
-            OWN_NOTICES + " ORDER BY n.created_at DESC, n.id DESC LIMIT %s OFFSET %s",
+            OWN_NOTICES + " ORDER BY n.activity_at DESC, n.id DESC LIMIT %s OFFSET %s",
             (user["id"], PAGE_SIZE + 1, (page - 1) * PAGE_SIZE),
         ).fetchall()
     return view(request, "student-notices.html", user=user, notices=notices[:PAGE_SIZE],
@@ -108,7 +125,7 @@ def read_notice(
         check_csrf(user["csrf"], csrf)
         updated = conn.execute(
             """UPDATE review_notices SET read_at = COALESCE(read_at, now())
-               WHERE id = %s AND student_id = %s RETURNING id""",
+               WHERE id = %s AND student_id = %s RETURNING clarification_id""",
             (notice_id, user["id"]),
         ).fetchone()
         if not updated:
@@ -117,10 +134,15 @@ def read_notice(
             "SELECT count(*) AS unread FROM review_notices WHERE student_id = %s AND read_at IS NULL",
             (user["id"],),
         ).fetchone()["unread"]
-        if wants_json(request):
-            return JSONResponse({"unread": unread})
         if abrir:
             notice = conn.execute(OWN_NOTICES + " AND n.id = %s", (user["id"], notice_id)).fetchone()
+        if wants_json(request):
+            result = {"unread": unread}
+            if abrir and updated["clarification_id"]:
+                result["activity_tick"] = notice["activity_tick"]
+                result["content"] = templates.get_template("notice-detail.html").render(notice=notice)
+            return JSONResponse(result)
+        if abrir:
             user["unread_notices"] = unread
             return view(request, "student-notice.html", user=user, notice=notice, page=page)
     return redirect(f"/student/avisos?page={page}")

@@ -1,6 +1,6 @@
 {% extends "base.html" %}
 {% from "macros.html" import csrf %}
-{% from "grade-components.html" import grade_breakdown, clarification_content %}
+{% from "grade-components.html" import grade_breakdown %}
 {% block title %}Nota de la entrega · Paridad{% endblock %}
 {% block content %}
 <div class="page-heading">
@@ -15,16 +15,17 @@
   </section>
   {% if grade.clarification_status or grade.automatic_grade is not none or grade.grade_override is not none %}
   <section class="card clarification-card" id="aclaracion">
-    <h2>{{ 'Aclaración' if grade.clarification_status else 'Pedir aclaración' }}</h2>
     {% if grade.clarification_status %}
-      {{ clarification_content(grade) }}
+      {% include "student-clarification-status.html" %}
     {% else %}
-      <form class="stack" action="/student/submissions/{{ grade.id }}/aclaracion" method="post">
+      <h2>Pedir aclaración</h2>
+      <form class="stack" action="/student/submissions/{{ grade.id }}/aclaracion" method="post" data-request-clarification>
         {{ csrf(user) }}
         <label for="clarification-reason">Motivo de la solicitud</label>
         <textarea id="clarification-reason" name="reason" rows="5" maxlength="600" required
                   aria-describedby="clarification-help" placeholder="Cuéntanos qué parte de la nota quieres que revisemos."></textarea>
         <p class="field-help" id="clarification-help">Una solicitud por archivo · hasta 600 caracteres.</p>
+        <p class="callout alert" data-clarification-error role="alert" hidden></p>
         <button class="button" type="submit">Enviar aclaración</button>
       </form>
     {% endif %}

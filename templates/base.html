@@ -8,7 +8,7 @@
   <title>{% block title %}Paridad{% endblock %}</title>
   <link rel="stylesheet" href="/static/paridad.css">
   <script src="/static/navigation.min.js" defer></script>
-  {% if user and (user.role == 'STUDENT' or request.url.path in ['/admin/reports', '/admin/submissions']) %}
+  {% if user and user.role in ['STUDENT', 'ADMIN'] %}
   <script src="/static/notices-ui.min.js" defer></script>
   {% endif %}
   {% if user and user.role == 'STUDENT' %}<script src="/static/student.min.js" defer></script>{% endif %}
@@ -32,7 +32,13 @@
       <nav class="section-nav" aria-label="Administración">
         <ul class="section-links">
           {% for url, label in [('/admin', 'Panel'), ('/admin/accounts', 'Cuentas'), ('/admin/activities', 'Actividades'), ('/admin/reports', 'Informes'), ('/admin/aclaraciones', 'Aclaraciones'), ('/admin/submissions', 'Archivos')] %}
-          <li><a href="{{ url }}" {% if current == label %}aria-current="page"{% endif %}>{{ label }}</a></li>
+          <li>
+            <a href="{{ url }}" {% if current == label %}aria-current="page"{% endif %}>{{ label }}{% if label == 'Aclaraciones' %}
+              <span id="admin-clarification-count" class="notice-count" aria-live="polite"{% if not user.pending_clarifications %} hidden{% endif %}>
+                <span class="screen-reader-only">Pendientes </span><span data-clarification-count>{{ user.pending_clarifications }}</span>
+              </span>{% endif %}
+            </a>
+          </li>
           {% endfor %}
         </ul>
       </nav>

@@ -12,7 +12,7 @@
   <ul class="notice-list">
     {% for notice in notices %}
     <li class="notice-entry{% if not notice.read_at %} notice-unread{% endif %}">
-      <form action="/student/avisos/leer" method="post" data-notice-open{% if not notice.read_at %} data-unread{% endif %}>
+      <form action="/student/avisos/leer" method="post" data-notice-open{% if notice.clarification_id %} data-refresh-thread{% endif %}{% if not notice.read_at %} data-unread{% endif %}>
         {{ csrf(user) }}
         <input type="hidden" name="notice_id" value="{{ notice.id }}">
         <input type="hidden" name="page" value="{{ page }}">
@@ -20,7 +20,7 @@
         <button type="submit" class="notice-row" aria-haspopup="dialog">
           <span class="notice-row-details">
             <span class="notice-heading">{{ notice_title(notice) }}{% if not notice.read_at %}<span class="tag pending" data-notice-new>Nuevo</span>{% endif %}</span>
-            {% if notice.submission_id %}
+            {% if notice.submission_id or notice.clarification_id %}
             <span class="table-detail">{{ notice.filename }} · {{ notice.activity }}</span>
             {% elif notice.related_deliveries and notice.related_deliveries|length == 1 %}
             <span class="table-detail">{{ notice.related_deliveries[0].filename }} · {{ notice.related_deliveries[0].activity }}</span>
@@ -28,7 +28,7 @@
             <span class="table-detail">{{ notice.related_deliveries|length }} entregas</span>
             {% endif %}
           </span>
-          <time class="table-detail">{{ notice.created_at|date_label }}</time>
+          <time class="table-detail">{{ notice.activity_at|date_label }}</time>
         </button>
         <template>{{ notice_content(notice, 'student-notice-title') }}</template>
       </form>

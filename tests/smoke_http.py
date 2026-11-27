@@ -250,7 +250,7 @@ def main():
         assert "compania.c" not in inbox_first and "primero.c" not in inbox_second
         assert second_name not in inbox_first and first_name not in inbox_second
         assert "100,00 %" in inbox_first and "Umbral 40 %" in inbox_first
-        assert "Umbral 40 %" in inbox_second and "Qué puedes hacer" in inbox_second
+        assert "Umbral 40 %" in inbox_second and "Qué puede hacer" in inbox_second
         post(admin, "/admin/settings", admin_csrf, similarity_threshold=70, ai_threshold=60)
         after_change = assert_status(first.get("/student/avisos")).text
         assert "Umbral 40 %" in after_change and "Umbral 30 %" in after_change
@@ -284,7 +284,7 @@ def main():
         assert_status(first.post(read_path, data={"csrf": first_csrf}), 422)
         private_ids = re.findall(r'name="notice_id" value="([^"]+)"', assert_status(first.get("/student/avisos")).text)
         opened = post(first, read_path, first_csrf, 200, notice_id=private_ids[0], abrir="true")
-        assert "El equipo docente te invita" in opened.text
+        assert "El equipo docente le solicita" in opened.text
         assert "Entregas por revisar" in opened.text
         assert "primero.c" in opened.text and "mismo-estudiante.c" in opened.text
         assert "compania.c" not in opened.text and second_name not in opened.text
@@ -313,16 +313,59 @@ def main():
         assert "Comentarios en inglés" in grade_html
         assert grade_html.count("<textarea") == 1 and 'name="reason"' in grade_html
         assert_status(second.get(grade_url), 404)
+        pending_url = "/api/admin/aclaraciones/pendientes"
+        assert_status(first.get(pending_url), 403)
+        pending_before = assert_status(admin.get(pending_url)).json()["pending"]
         clarification = f"/student/submissions/{graded['id']}/aclaracion"
-        post(first, clarification, first_csrf, reason="Verificar los comentarios", comments="Revisar este archivo.")
+        requested = first.post(clarification, data={
+            "csrf": first_csrf, "reason": "Verificar los comentarios", "comments": "Revisar este archivo.",
+        }, headers={"Accept": "application/json"})
+        receipt = assert_status(requested).json()
+        assert "Solicitud recibida" in receipt["content"] and receipt["unread"] == 1
         post(first, clarification, first_csrf, 409, reason="Duplicada")
+        assert assert_status(admin.get(pending_url)).json()["pending"] == pending_before + 1
         assert "primero.c" in assert_status(admin.get("/admin/aclaraciones")).text
+        thread = re.compile(r'data-refresh-thread(?P<unread> data-unread)?[^>]*>.*?name="notice_id" value="([^"]+)"', re.S)
+        student_inbox = assert_status(first.get("/student/avisos")).text
+        entry = thread.search(student_inbox)
+        assert entry["unread"] and "Equipo docente de la asignatura" in student_inbox
+        thread_id = entry[2]
+        post(second, read_path, second_csrf, 404, notice_id=thread_id)
+
+        opened = first.post(read_path, data={
+            "csrf": first_csrf, "notice_id": thread_id, "abrir": "true",
+        }, headers={"Accept": "application/json"})
+        pending_thread = assert_status(opened).json()
+        assert "Solicitud recibida" in pending_thread["content"]
+        assert "Resolución docente" not in pending_thread["content"] and pending_thread["unread"] == 0
+
         decision = f"/admin/submissions/{graded['id']}/aclaracion"
         post(first, decision, first_csrf, 403, decision="resolved", response="Sin acceso")
-        post(admin, decision, admin_csrf, decision="resolved", response="Comentario del docente", grade=42)
+        sent_decision = post(admin, decision, admin_csrf, decision="resolved", response="Comentario del docente", grade=42)
+        assert sent_decision.headers["location"].endswith("?respuesta=enviada#aclaracion")
         assert wait_result(first, "primero.c")["grade"] == 42
         assert "Comentario del docente" in assert_status(first.get(grade_url)).text
         assert "primero.c" not in assert_status(admin.get("/admin/aclaraciones")).text
+        assert assert_status(admin.get(pending_url)).json()["pending"] == pending_before
+
+        entries = list(thread.finditer(assert_status(first.get("/student/avisos")).text))
+        assert len(entries) == 1 and entries[0][2] == thread_id and entries[0]["unread"]
+        response = first.post(read_path, data={
+            "csrf": first_csrf, "notice_id": thread_id, "abrir": "true",
+        }, headers={"Accept": "application/json"})
+        history_thread = assert_status(response).json()
+        assert history_thread["activity_tick"] > pending_thread["activity_tick"]
+        assert "Solicitud recibida" in history_thread["content"] and "Resolución docente" in history_thread["content"]
+        assert "Comentario del docente" in history_thread["content"] and "42 / 50" in history_thread["content"]
+        assert "compania.c" not in history_thread["content"] and second_name not in history_thread["content"]
+
+        second_request = f"/student/submissions/{second_row['id']}/aclaracion"
+        post(second, second_request, second_csrf, reason="Solicito otra revisión.")
+        second_decision = f"/admin/submissions/{second_row['id']}/aclaracion"
+        post(admin, second_decision, admin_csrf, decision="rejected", response="Se ratifica la evaluación.")
+        second_inbox = assert_status(second.get("/student/avisos")).text
+        assert "Solicitud rechazada" in second_inbox and "Se ratifica la evaluación." in second_inbox
+        assert "Comentario del docente" not in second_inbox and first_name not in second_inbox
 
         # Free two slots after the tests above, so the same student can test another activity.
         existing = {row["filename"]: row["id"] for row in history(first)}
