@@ -148,7 +148,7 @@ def main():
              extensions=".txt", comments="c", keywords="int return if")
         module_code = f"mod_{suffix}"
         post(admin, "/admin/activities/modulos", admin_csrf, code=module_code, title="Módulo común")
-        activities_page = assert_status(admin.get("/admin/activities")).text
+        activities_page = assert_status(admin.get("/admin/activities/crear/actividad")).text
         module_id = re.search(r'<option value="(\d+)">' + module_code.upper() + r' ·', activities_page)[1]
         c_id = re.search(r'name="language_ids" value="([0-9]+)"\s*> C</label>', activities_page)[1]
         custom_id = re.search(r'name="language_ids" value="([0-9]+)"\s*> ' + language_code + "</label>", activities_page)[1]
@@ -244,6 +244,26 @@ def main():
         assert "/descargar" not in reports and "/eliminar" not in reports
         pair_links = PAIR_LINK.findall(reports)
         assert len(pair_links) == 2 and first_name in reports and second_name in reports
+        search_params = {"activity_id": activity_id, "language_id": c_id, "q": second_name.upper()}
+        filtered_report = assert_status(admin.get("/admin/reports", params=search_params)).text
+        deliveries_html = filtered_report.split('id="entregas"', 1)[1].split('id="comparaciones"', 1)[0]
+        assert "compania.c" in deliveries_html and "primero.c" not in deliveries_html
+        assert len(PAIR_LINK.findall(filtered_report)) == 2 and "3 archivos" in filtered_report
+        filtered_files = assert_status(admin.get("/admin/submissions", params=search_params)).text
+        assert "compania.c" in filtered_files and "primero.c" not in filtered_files
+        filtered_export = post(admin, "/admin/reports/exportar", admin_csrf, 200, all_results="true", **search_params)
+        filtered_workbook = load_workbook(BytesIO(filtered_export.content))
+        try:
+            assert filtered_workbook["Entregas"].max_row == 2
+            assert filtered_workbook["Entregas"]["E2"].value == "compania.c"
+            assert filtered_workbook["Comparaciones"].max_row == 3
+        finally:
+            filtered_workbook.close()
+        archive = post(admin, "/admin/submissions/lote", admin_csrf, 200, action="zip", all_results="true", **search_params)
+        with ZipFile(BytesIO(archive.content)) as bundle:
+            assert len(bundle.namelist()) == 1 and "compania.c" in bundle.namelist()[0]
+        notice_preview = post(admin, "/admin/avisos", admin_csrf, 200, preview="true", all_results="true", **search_params)
+        assert "bandeja de 1 estudiante" in notice_preview.text
         detail = assert_status(admin.get(pair_links[0])).text
         assert "Fragmentos coincidentes" in detail and "líneas " in detail and "100,00 %" in detail
         assert detail.count('class="comparison-code"') == 2 and "code-row code-match" in detail
@@ -362,6 +382,8 @@ def main():
         post(first, clarification, first_csrf, 409, reason="Duplicada")
         assert assert_status(admin.get(pending_url)).json()["pending"] == pending_before + 1
         assert "primero.c" in assert_status(admin.get("/admin/aclaraciones")).text
+        assert "primero.c" not in assert_status(admin.get("/admin/aclaraciones", params={"q": second_name})).text
+        assert "primero.c" in assert_status(admin.get("/admin/aclaraciones", params={"q": first_name.upper()})).text
         thread = re.compile(r'data-refresh-thread(?P<unread> data-unread)?[^>]*>.*?name="notice_id" value="([^"]+)"', re.S)
         student_inbox = assert_status(first.get("/student/avisos")).text
         entry = thread.search(student_inbox)
@@ -500,6 +522,12 @@ def main():
 
         bulk_accounts = "/admin/accounts/lote"
         post(first, bulk_accounts, first_csrf, 403, action="disable", selection=ids)
+        filtered_accounts = assert_status(admin.get("/admin/accounts", params={"q": third_name.upper()})).text
+        assert third_name in filtered_accounts and first_name not in filtered_accounts
+        assert "Sin cuentas para esta búsqueda." in assert_status(admin.get("/admin/accounts", params={"q": "%"})).text
+        post(admin, bulk_accounts, admin_csrf, action="disable", all_results="true", q=third_name)
+        assert_status(guest.get("/api/student/submissions"), 401)
+        assert_status(first.get("/api/student/submissions"))
         post(admin, bulk_accounts, admin_csrf, action="disable", selection=ids)
         assert_status(first.get("/api/student/submissions"), 401)
         assert assert_status(admin.get("/admin/accounts")).text.count("Inhabilitada") >= 2

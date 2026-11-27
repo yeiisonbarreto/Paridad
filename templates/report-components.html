@@ -1,10 +1,12 @@
-{% macro results_filters(path, labs, languages, activity, language, alerts=none) %}
+{% from "macros.html" import student_search, filter_status %}
+{% macro results_filters(path, labs, languages, activity, language, q, alerts=none) %}
 {% set reports = alerts is not none %}
 {% if reports %}<section class="card" aria-label="Filtros de informes">
-{% else %}<details class="card panel-disclosure"{% if activity or language %} open{% endif %}>
+{% else %}<details class="card panel-disclosure" open>
   <summary>Filtros</summary>
 {% endif %}
-  <form class="filters{% if not reports %} disclosure-content{% endif %}" action="{{ path }}" method="get">
+  <form class="filters{% if not reports %} disclosure-content{% endif %}" action="{{ path }}" method="get" data-auto-filters>
+    {{ student_search(q) }}
     <div class="field">
       <label for="report-activity">Actividad</label>
       <select name="activity_id" id="report-activity">
@@ -22,9 +24,7 @@
     {% if alerts is not none %}
     <label class="check"><input name="alerts_only" type="checkbox" value="true" {% if alerts %}checked{% endif %}> Solo alertas</label>
     {% endif %}
-    <div class="filter-actions">
-      <button class="button" type="submit">Filtrar</button>
-    </div>
+    {{ filter_status() }}
   </form>
 {% if reports %}</section>{% else %}</details>{% endif %}
 {% endmacro %}

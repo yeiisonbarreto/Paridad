@@ -1,18 +1,19 @@
 {% extends "base.html" %}
-{% from "macros.html" import bulk_controls, csrf, pagination %}
+{% from "macros.html" import bulk_controls, csrf, pagination, search_params %}
 {% from "report-components.html" import results_filters, submission_table %}
 {% block title %}Informes · Paridad{% endblock %}
 {% block content %}
 <div class="page-heading grade-heading">
   <h1>Informes</h1>
   <nav class="filter-actions report-links" aria-label="Secciones del informe">
-    <a href="#entregas">Entregas</a>
-    <a href="#comparaciones">Comparaciones</a>
-    <a href="#grupos">Grupos</a>
+    <a class="button secondary compact-button" href="#entregas">Entregas</a>
+    <a class="button secondary compact-button" href="#comparaciones">Comparaciones</a>
+    <a class="button secondary compact-button" href="#grupos">Grupos</a>
   </nav>
 </div>
-{{ results_filters('/admin/reports', labs, languages, selected_activity, selected_language, alerts_only) }}
+{{ results_filters('/admin/reports', labs, languages, selected_activity, selected_language, q, alerts_only) }}
 
+<div data-filter-results>
 <section class="card section-gap report-deliveries" id="entregas" aria-labelledby="deliveries-heading">
   <h2 id="deliveries-heading">Entregas</h2>
   {% if submissions %}
@@ -22,6 +23,7 @@
       <input type="hidden" name="preview" value="true">
       <input type="hidden" name="activity_id" value="{{ selected_activity or '' }}">
       <input type="hidden" name="language_id" value="{{ selected_language or '' }}">
+      <input type="hidden" name="q" value="{{ q }}">
       {% if alerts_only %}<input type="hidden" name="alerts_only" value="true">{% endif %}
       {{ bulk_controls('Todos los archivos del filtro', [('notice', 'Enviar aviso')]) }}
     </form>
@@ -65,7 +67,8 @@
     </summary>
     <div class="disclosure-content">{{ submission_table(group.files, user, grouped=true) }}</div>
   </details>
-  {% else %}<p class="empty">Ningún grupo supera el umbral de similitud.</p>{% endfor %}
+  {% else %}<p class="empty">Sin grupos de similitud para estos filtros.</p>{% endfor %}
 </section>
-{{ pagination('/admin/reports', page, has_next, ('&activity_id=' ~ selected_activity if selected_activity else '') ~ ('&language_id=' ~ selected_language if selected_language else '') ~ ('&alerts_only=true' if alerts_only else '')) }}
+{{ pagination('/admin/reports', page, has_next, ('&activity_id=' ~ selected_activity if selected_activity else '') ~ ('&language_id=' ~ selected_language if selected_language else '') ~ ('&alerts_only=true' if alerts_only else '') ~ search_params(q)) }}
+</div>
 {% endblock %}

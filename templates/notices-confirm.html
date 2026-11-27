@@ -8,6 +8,7 @@
   <form action="/admin/avisos" method="post" class="notice-dialog-actions">
     {{ csrf(user) }}
     <input type="hidden" name="destination" value="{{ destination }}">
+    <input type="hidden" name="q" value="{{ q }}">
     <input type="hidden" name="activity_id" value="{{ activity_id }}">
     <input type="hidden" name="language_id" value="{{ language_id }}">
     {% if alerts_only %}<input type="hidden" name="alerts_only" value="true">{% endif %}

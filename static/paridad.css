@@ -556,3 +556,38 @@ code { font: 0.85rem/1.55 ui-monospace, "Cascadia Code", monospace; }
 .record-dialog [data-record-panel] { margin: 0; padding: 0; max-width: none; border: 0; box-shadow: none; }
 .record-dialog h1 { font-size: 1.4rem; margin: 0; }
 .record-dialog [data-record-error]:not([hidden]) { margin-block-end: 0.9rem; }
+
+.student-identity { display: flex; align-items: center; gap: 0.6rem; }
+.student-avatar {
+  --avatar-ink: #245d77;
+  --avatar-bg: #e1f0f6;
+  display: inline-grid;
+  grid-template-columns: repeat(5, 1fr);
+  grid-template-rows: repeat(5, 1fr);
+  inline-size: 2rem;
+  block-size: 2rem;
+  flex: none;
+  padding: 0.38rem;
+  gap: 1px;
+  border-radius: 0.62rem;
+  background: var(--avatar-bg);
+}
+.avatar-pixel { background: var(--avatar-ink); border-radius: 0.5px; }
+.avatar-tone-1 { --avatar-ink: #285e48; --avatar-bg: #e0f1e8; }
+.avatar-tone-2 { --avatar-ink: #634b83; --avatar-bg: #eee6f7; }
+.avatar-tone-3 { --avatar-ink: #843e59; --avatar-bg: #fae7ef; }
+.avatar-tone-4 { --avatar-ink: #805522; --avatar-bg: #faeedc; }
+.avatar-tone-5 { --avatar-ink: #414e8c; --avatar-bg: #e6eafa; }
+.student-module-panel { margin-block-start: 0.75rem; }
+.record-dialog:has(.student-module-panel) { width: min(40rem, 100% - 2rem); }
+.module-dialog-heading { display: flex; flex-wrap: wrap; align-items: center; justify-content: space-between; gap: 0.6rem; }
+.module-dialog-heading h1 { margin: 0; overflow-wrap: anywhere; }
+.student-module-panel .delivery-selection { margin: 0; }
+.student-module-panel .delivery-heading { margin: 0; }
+.creation-buttons > .button { justify-self: stretch; }
+.module-actions { display: flex; justify-content: flex-end; margin-bottom: 0.35rem; }
+.filter-status { grid-column: 1 / -1; margin: 0; }
+.filter-status:empty { display: none; }
+.search-field { min-width: 0; }
+.account-search { margin-block-end: 0.9rem; max-width: 28rem; }
+[data-filter-results][inert] { opacity: 0.62; }

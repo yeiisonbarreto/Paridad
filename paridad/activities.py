@@ -58,16 +58,24 @@ def form_options(conn):
 def activities(request: Request):
     with request.app.state.pool.connection() as conn:
         user = administrator(conn, request)
-        options = form_options(conn)
+        modules = conn.execute("SELECT * FROM modules ORDER BY code").fetchall()
         now = database_time(conn)
-        deliveries = {module["id"]: [] for module in options["modules"]}
+        deliveries = {module["id"]: [] for module in modules}
         for activity in conn.execute(ACTIVITY_SELECT + " ORDER BY a.code"):
             group = deliveries.get(activity["module_id"])
             if group is not None:
                 activity["status"] = delivery_status(activity, now)
                 group.append(activity)
+    return view(request, "activities.html", user=user, modules=modules, deliveries=deliveries)
+
+
+@router.get("/crear/{kind}")
+def creation_form(request: Request, kind: Literal["modulo", "actividad", "lenguaje"]):
+    with request.app.state.pool.connection() as conn:
+        user = administrator(conn, request)
+        options = form_options(conn) if kind == "actividad" else {}
     return view(
-        request, "activities.html", user=user, deliveries=deliveries, **options,
+        request, "activity-create.html", user=user, kind=kind, **options,
         comment_styles={key: label for key, label in {
             "none": "Sin comentarios", "c": "// y /* … */", "marie": "/", "arm": "//, @, ; y /* … */",
             "vhdl": "--", "hash": "#", "semicolon": ";",

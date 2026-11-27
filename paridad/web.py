@@ -1,6 +1,7 @@
 """Shared rendering and HTTP controls."""
 
 from datetime import datetime
+from hashlib import blake2s
 from urllib.parse import urlsplit
 
 from fastapi import Request
@@ -23,8 +24,16 @@ def local_datetime(value: datetime | None) -> str:
     return value.astimezone(DISPLAY_TZ).strftime("%Y-%m-%dT%H:%M") if value else ""
 
 
+def avatar_pattern(student_id: int) -> tuple[int, list[bool]]:
+    digest = blake2s(str(student_id).encode(), digest_size=4).digest()
+    bits = int.from_bytes(digest[:2], "big") | (1 << 7)
+    cells = [bool(bits & (1 << (row * 3 + col))) for row in range(5) for col in (0, 1, 2, 1, 0)]
+    return digest[2] % 6, cells
+
+
 templates = Jinja2Templates(directory=BASE_DIR / "templates")
 templates.env.filters.update(percent=percent, date_label=date_label, local_datetime=local_datetime)
+templates.env.globals["avatar_pattern"] = avatar_pattern
 templates.env.globals["paridad_logo_available"] = (BASE_DIR / "static" / "paridad-logo.png").is_file()
 
 

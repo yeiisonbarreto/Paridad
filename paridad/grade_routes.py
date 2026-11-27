@@ -6,7 +6,7 @@ from uuid import UUID
 from fastapi import APIRouter, Form, HTTPException, Request
 from starlette.responses import JSONResponse
 
-from .admin import Csrf, PAGE_SIZE, Page, administrator
+from .admin import Csrf, PAGE_SIZE, Page, SearchQuery, administrator, clean_student_search, student_match
 from .notices import publish_clarification
 from .security import auth_user, check_csrf
 from .web import redirect, templates, view, wants_json
@@ -82,20 +82,23 @@ def request_clarification(
 
 
 @router.get("/admin/aclaraciones")
-def clarification_list(request: Request, page: Page = 1, state: Literal["pending", "all"] = "pending"):
+def clarification_list(
+    request: Request, page: Page = 1, state: Literal["pending", "all"] = "pending", q: SearchQuery = "",
+):
+    q = clean_student_search(q)
     with request.app.state.pool.connection() as conn:
         user = administrator(conn, request)
         requests = conn.execute(
-            """SELECT s.id, s.filename, COALESCE(s.grade_override, s.automatic_grade) AS grade,
+            f"""SELECT s.id, s.filename, COALESCE(s.grade_override, s.automatic_grade) AS grade,
                       a.code AS activity, u.display_name, u.username, c.status, c.created_at
                FROM grade_clarifications c JOIN submissions s ON c.submission_id = s.id
                JOIN activities a ON a.id = s.activity_id JOIN users u ON u.id = s.student_id
-               WHERE (%s OR c.status = 'pending')
+               WHERE (%s OR c.status = 'pending') AND {student_match('u')}
                ORDER BY c.created_at DESC, s.id LIMIT %s OFFSET %s""",
-            (state == "all", PAGE_SIZE + 1, (page - 1) * PAGE_SIZE),
+            (state == "all", q, PAGE_SIZE + 1, (page - 1) * PAGE_SIZE),
         ).fetchall()
     return view(request, "clarifications.html", user=user, rows=requests[:PAGE_SIZE],
-                page=page, has_next=len(requests) > PAGE_SIZE, filter_state=state)
+                page=page, has_next=len(requests) > PAGE_SIZE, filter_state=state, q=q)
 
 
 @router.get("/api/admin/aclaraciones/pendientes")

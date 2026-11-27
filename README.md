@@ -53,11 +53,13 @@ Desde el menú de la cuenta, abre **Mi cuenta**. Para cambiar el usuario o la co
 
 En **Archivos**, abre **Acciones** para ver, descargar o eliminar una entrega. Marca varias entregas para descargarlas en un ZIP o eliminarlas tras confirmar. **Todos los archivos del filtro** abarca todas sus páginas. Al eliminar una entrega también se eliminan sus comparaciones. El historial de los estudiantes afectados se recalcula. Paridad guarda los bytes originales de las nuevas entregas. Las entregas anteriores a esta actualización se descargan como texto UTF-8 a partir del código almacenado.
 
+En **Cuentas**, **Informes**, **Aclaraciones** y **Archivos** puedes buscar estudiantes por nombre o ID. Los filtros se aplican al cambiar y las descargas y acciones en lote respetan el filtro activo.
+
 En **Informes**, **Descargar Excel** está al lado de la selección. Si marcas archivos, el libro incluye esas entregas y sus comparaciones. Si dejas la selección vacía o marcas **Todos los archivos del filtro**, incluye todas las páginas de los filtros activos. Desde **Comparaciones**, abre **Ver** para revisar ambos archivos con las líneas coincidentes resaltadas. Los grupos reúnen archivos de la misma actividad y lenguaje conectados por coincidencias por encima del umbral.
 
 ## Módulos y plazos
 
-En **Actividades**, crea un módulo como **LAB01** y asigna al módulo las actividades **LAB01A** y **LAB01B**. Cada actividad tiene sus propios lenguajes y horarios. Los horarios se interpretan en `PARIDAD_TIME_ZONE` (por defecto, `America/Bogota`). Cuando el estudiante abre un módulo desde **Mis entregas**, puede consultar el cierre y el tiempo restante de cada entrega.
+En **Actividades**, crea un módulo como **LAB01** y asigna al módulo las actividades **LAB01A** y **LAB01B**. Cada actividad tiene sus propios lenguajes y horarios. Los horarios se interpretan en `PARIDAD_TIME_ZONE` (por defecto, `America/Bogota`). Al abrir un módulo desde **Mis entregas**, aparece una ventana para enviar archivos y consultar el cierre y el tiempo restante de cada entrega.
 
 En **Acciones** puedes editar la actividad, cerrar o reabrir entregas, y eliminarla tras confirmar. Reabrir conserva el plazo configurado. Eliminar una actividad borra sus archivos, comparaciones y aclaraciones vinculadas. La migración asigna cada actividad existente a un módulo de su mismo código y conserva su estado y sus entregas.
 

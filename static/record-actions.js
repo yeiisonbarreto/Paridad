@@ -65,6 +65,7 @@ if (recordDialog?.showModal) {
       title.tabIndex = -1;
       recordDialog.setAttribute("aria-labelledby", title.id);
       title.focus();
+      panel.dispatchEvent(new CustomEvent("paridad:record-opened", { bubbles: true }));
     } catch (failure) {
       error.textContent = failure.message;
       error.hidden = false;
@@ -88,7 +89,11 @@ if (recordDialog?.showModal) {
     const link = event.target.closest("a[data-record-action]");
     if (!link || event.ctrlKey || event.metaKey || event.shiftKey || event.altKey) return;
     event.preventDefault();
-    showRecord(link.href, link);
+    if (content.contains(link)) {
+      if (!busy) loadRecord(link.href);
+    } else {
+      showRecord(link.href, link);
+    }
   });
 
   document.addEventListener("submit", event => {

@@ -133,7 +133,8 @@ if (clarificationCounter) {
     if (pollingClarifications || document.hidden) return;
     pollingClarifications = true;
     try {
-      const response = await fetch(requests ? window.location.href : "/api/admin/aclaraciones/pendientes",
+      const requestedUrl = window.location.href;
+      const response = await fetch(requests ? requestedUrl : "/api/admin/aclaraciones/pendientes",
         { cache: "no-store" });
       if (!response.ok || response.redirected) return;
       let pending;
@@ -141,7 +142,8 @@ if (clarificationCounter) {
         const page = new DOMParser().parseFromString(await response.text(), "text/html");
         pending = Number(page.querySelector("[data-clarification-count]")?.textContent);
         const updated = page.querySelector("#clarification-requests");
-        if (updated && !requests.contains(document.activeElement) && requests.innerHTML !== updated.innerHTML) {
+        if (updated && requestedUrl === window.location.href && !requests.inert &&
+            !requests.contains(document.activeElement) && requests.innerHTML !== updated.innerHTML) {
           requests.innerHTML = updated.innerHTML;
         }
       } else {

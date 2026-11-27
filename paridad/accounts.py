@@ -2,13 +2,14 @@
 
 import secrets
 from typing import Annotated, Literal
+from urllib.parse import urlencode
 from uuid import UUID
 
 from fastapi import APIRouter, File, Form, HTTPException, Request, UploadFile
 from psycopg import errors
 from starlette.responses import Response
 
-from .admin import Csrf, Name, PAGE_SIZE, Page, administrator, required_text
+from .admin import Csrf, Name, PAGE_SIZE, Page, SearchForm, SearchQuery, administrator, clean_student_search, required_text, student_match
 from .bulk import consume_deletion, deletion_preview
 from .config import MAX_FILE_BYTES, PUBLIC_ORIGIN
 from .invitations import create_invitation
@@ -50,17 +51,18 @@ def excel_file(contents: bytes, filename: str) -> Response:
 
 
 @router.get("")
-def accounts(request: Request, page: Page = 1):
+def accounts(request: Request, page: Page = 1, q: SearchQuery = ""):
+    q = clean_student_search(q)
     with request.app.state.pool.connection() as conn:
         user = administrator(conn, request)
         students = conn.execute(
-            """SELECT id, username, display_name, email, active FROM users WHERE role = 'STUDENT'
-               ORDER BY username LIMIT %s OFFSET %s""",
-            (PAGE_SIZE + 1, (page - 1) * PAGE_SIZE),
+            f"""SELECT id, username, display_name, email, active FROM users u WHERE role = 'STUDENT'
+                AND {student_match("u")} ORDER BY username LIMIT %s OFFSET %s""",
+            (q, PAGE_SIZE + 1, (page - 1) * PAGE_SIZE),
         ).fetchall()
     return view(
         request, "accounts.html", user=user, students=students[:PAGE_SIZE],
-        page=page, has_next=len(students) > PAGE_SIZE, roster_limit=MAX_ROSTER_ROWS,
+        page=page, has_next=len(students) > PAGE_SIZE, roster_limit=MAX_ROSTER_ROWS, q=q,
     )
 
 
@@ -135,11 +137,12 @@ def create_account(
     return redirect("/admin/accounts")
 
 
-def selected_students(conn, ids: list[int] | None, *, lock: bool = False) -> list[int]:
-    query = "SELECT id FROM users WHERE role = 'STUDENT' AND (%s::bigint[] IS NULL OR id = ANY(%s)) ORDER BY id"
+def selected_students(conn, ids: list[int] | None, *, search: str = "", lock: bool = False) -> list[int]:
+    query = f"""SELECT id FROM users u WHERE role = 'STUDENT' AND (%s::bigint[] IS NULL OR id = ANY(%s))
+                AND {student_match("u")} ORDER BY id"""
     if lock:
         query += " FOR NO KEY UPDATE"
-    return [row["id"] for row in conn.execute(query, (ids, ids))]
+    return [row["id"] for row in conn.execute(query, (ids, ids, search))]
 
 
 def remove_student_accounts(conn, ids: list[int]) -> None:
@@ -157,13 +160,15 @@ def remove_student_accounts(conn, ids: list[int]) -> None:
 def bulk_accounts(
     request: Request, csrf: Csrf, action: Annotated[Literal["disable", "enable", "delete"], Form()],
     selection: Annotated[list[int], Form()] = [], all_results: Annotated[bool, Form()] = False,
+    q: SearchForm = "",
 ):
+    q = clean_student_search(q)
     with request.app.state.pool.connection() as conn:
         user = administrator(conn, request, csrf)
         requested = None if all_results else sorted(set(selection))
         if requested is not None and any(not 0 < item < 2**63 for item in requested):
             raise HTTPException(400, "Selección inválida.")
-        ids = selected_students(conn, requested, lock=action != "delete")
+        ids = selected_students(conn, requested, search=q, lock=action != "delete")
         if requested is not None and requested != ids:
             raise HTTPException(409, "La selección cambió. Vuelve a seleccionar las cuentas.")
         if not ids:
@@ -175,7 +180,7 @@ def bulk_accounts(
         if not active:
             conn.execute("DELETE FROM sessions WHERE user_id = ANY(%s)", (ids,))
             conn.execute("DELETE FROM student_invitations WHERE user_id = ANY(%s)", (ids,))
-    return redirect("/admin/accounts")
+    return redirect("/admin/accounts" + ("?" + urlencode({"q": q}) if q else ""))
 
 
 @router.post("/lote/eliminar")

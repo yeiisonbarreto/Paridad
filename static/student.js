@@ -1,95 +1,106 @@
 "use strict";
 
-const activity = document.querySelector("#activity");
-const language = document.querySelector("#language");
-const source = document.querySelector("#source");
-const declared = document.querySelector("#ai-declared");
-const credit = document.querySelector("#ai-credit");
+function initializeStudentModule(panel) {
+  const activity = panel.querySelector("#activity");
+  const language = panel.querySelector("#language");
+  const source = panel.querySelector("#source");
+  const declared = panel.querySelector("#ai-declared");
+  const credit = panel.querySelector("#ai-credit");
 
-if (activity && language && source && declared && credit) {
-  function syncLanguages() {
-    for (const option of language.options) {
-      if (!option.dataset.activities) continue;
-      const allowed = option.dataset.activities.split(" ").includes(activity.value);
-      option.disabled = !allowed;
-      option.hidden = !allowed;
-      if (!allowed && option.selected) language.value = "";
+  if (activity && language && source && declared && credit) {
+    function syncLanguages() {
+      for (const option of language.options) {
+        if (!option.dataset.activities) continue;
+        const allowed = option.dataset.activities.split(" ").includes(activity.value);
+        option.disabled = !allowed;
+        option.hidden = !allowed;
+        if (!allowed && option.selected) language.value = "";
+      }
+      source.accept = language.selectedOptions[0]?.dataset.extensions || "";
     }
-    source.accept = language.selectedOptions[0]?.dataset.extensions || "";
+
+    function syncCredit() {
+      credit.disabled = !declared.checked;
+      credit.required = declared.checked;
+      credit.closest("label").hidden = !declared.checked;
+    }
+
+    activity.addEventListener("change", syncLanguages);
+    language.addEventListener("change", syncLanguages);
+    declared.addEventListener("change", syncCredit);
+    syncLanguages();
+    syncCredit();
   }
 
-  function syncCredit() {
-    credit.disabled = !declared.checked;
-    credit.required = declared.checked;
-    credit.closest("label").hidden = !declared.checked;
-  }
+  const deliverySelection = panel.querySelector("[data-server-time]");
+  if (deliverySelection) {
+    const serverTime = Number(deliverySelection.dataset.serverTime);
+    const loadedAt = performance.now();
+    const cards = Array.from(deliverySelection.querySelectorAll("[data-delivery-id]"));
+    const submitDelivery = panel.querySelector('#submission-form button[type="submit"]');
+    const labels = { open: "Abierta", scheduled: "Programada", closed: "Cerrada", expired: "Plazo vencido" };
 
-  activity.addEventListener("change", syncLanguages);
-  language.addEventListener("change", syncLanguages);
-  declared.addEventListener("change", syncCredit);
-  syncLanguages();
-  syncCredit();
+    function remaining(seconds) {
+      const minutes = Math.ceil(seconds / 60);
+      const hours = Math.floor(minutes / 60);
+      const days = Math.floor(hours / 24);
+      if (seconds < 60) return "menos de un minuto";
+      if (days) return `${days} d ${hours % 24} h`;
+      if (hours) return `${hours} h ${minutes % 60} min`;
+      return `${minutes} min`;
+    }
+
+    function updateWindows() {
+      const now = serverTime + (performance.now() - loadedAt) / 1000;
+      let openDeliveries = 0;
+      let selectionExpired = false;
+      for (const card of cards) {
+        const opens = Number(card.dataset.opens);
+        const closes = Number(card.dataset.closes);
+        let state = "open";
+        if (card.dataset.accepting === "false") state = "closed";
+        else if (opens > now) state = "scheduled";
+        else if (closes && closes <= now) state = "expired";
+
+        const badge = card.querySelector("[data-window-status]");
+        const label = labels[state];
+        if (badge.textContent !== label) badge.textContent = label;
+        badge.classList.toggle("pending", state === "scheduled");
+        badge.classList.toggle("alert", state === "closed" || state === "expired");
+        const countdown = card.querySelector("[data-countdown]");
+        let message = "";
+        if (state === "scheduled") message = `Abre en ${remaining(opens - now)}`;
+        if (state === "open") {
+          openDeliveries += 1;
+          message = closes ? `Tiempo restante · ${remaining(closes - now)}` : "Sin fecha límite";
+        }
+        if (countdown.textContent !== message) countdown.textContent = message;
+
+        const option = activity?.querySelector(`option[value="${card.dataset.deliveryId}"]`);
+        if (!option) continue;
+        option.disabled = state !== "open";
+        if (option.disabled && option.selected) {
+          activity.value = "";
+          selectionExpired = true;
+        }
+      }
+      if (selectionExpired) activity.dispatchEvent(new Event("change"));
+      if (submitDelivery) submitDelivery.disabled = openDeliveries === 0;
+    }
+
+    updateWindows();
+    const countdownTimer = window.setInterval(() => {
+      if (panel.isConnected) updateWindows();
+      else window.clearInterval(countdownTimer);
+    }, 1000);
+  }
 }
 
-const deliverySelection = document.querySelector("[data-server-time]");
-if (deliverySelection) {
-  const serverTime = Number(deliverySelection.dataset.serverTime);
-  const loadedAt = performance.now();
-  const cards = Array.from(deliverySelection.querySelectorAll("[data-delivery-id]"));
-  const submitDelivery = document.querySelector('#submission-form button[type="submit"]');
-  const labels = { open: "Abierta", scheduled: "Programada", closed: "Cerrada", expired: "Plazo vencido" };
-
-  function remaining(seconds) {
-    const minutes = Math.ceil(seconds / 60);
-    const hours = Math.floor(minutes / 60);
-    const days = Math.floor(hours / 24);
-    if (seconds < 60) return "menos de un minuto";
-    if (days) return `${days} d ${hours % 24} h`;
-    if (hours) return `${hours} h ${minutes % 60} min`;
-    return `${minutes} min`;
-  }
-
-  function updateWindows() {
-    const now = serverTime + (performance.now() - loadedAt) / 1000;
-    let openDeliveries = 0;
-    let selectionExpired = false;
-    for (const card of cards) {
-      const opens = Number(card.dataset.opens);
-      const closes = Number(card.dataset.closes);
-      let state = "open";
-      if (card.dataset.accepting === "false") state = "closed";
-      else if (opens > now) state = "scheduled";
-      else if (closes && closes <= now) state = "expired";
-
-      const badge = card.querySelector("[data-window-status]");
-      const label = labels[state];
-      if (badge.textContent !== label) badge.textContent = label;
-      badge.classList.toggle("pending", state === "scheduled");
-      badge.classList.toggle("alert", state === "closed" || state === "expired");
-      const countdown = card.querySelector("[data-countdown]");
-      let message = "";
-      if (state === "scheduled") message = `Abre en ${remaining(opens - now)}`;
-      if (state === "open") {
-        openDeliveries += 1;
-        message = closes ? `Tiempo restante · ${remaining(closes - now)}` : "Sin fecha límite";
-      }
-      if (countdown.textContent !== message) countdown.textContent = message;
-
-      const option = activity?.querySelector(`option[value="${card.dataset.deliveryId}"]`);
-      if (!option) continue;
-      option.disabled = state !== "open";
-      if (option.disabled && option.selected) {
-        activity.value = "";
-        selectionExpired = true;
-      }
-    }
-    if (selectionExpired) activity.dispatchEvent(new Event("change"));
-    if (submitDelivery) submitDelivery.disabled = openDeliveries === 0;
-  }
-
-  updateWindows();
-  window.setInterval(updateWindows, 1000);
-}
+const linkedModule = document.querySelector(".student-module-panel");
+if (linkedModule) initializeStudentModule(linkedModule);
+document.addEventListener("paridad:record-opened", event => {
+  if (event.target.matches(".student-module-panel")) initializeStudentModule(event.target);
+});
 
 if (document.querySelector("[data-deterrence]")) {
   document.addEventListener("contextmenu", event => {

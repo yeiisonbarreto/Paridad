@@ -1,5 +1,5 @@
 {% extends "base.html" %}
-{% from "macros.html" import bulk_controls, csrf, pagination %}
+{% from "macros.html" import bulk_controls, csrf, pagination, student_search, filter_status, search_params %}
 {% block title %}Cuentas · Paridad{% endblock %}
 {% block content %}
 <div class="page-heading"><h1>Cuentas de estudiantes</h1></div>
@@ -36,10 +36,16 @@
   </aside>
   <section class="card">
     <h2>Gestionar cuentas</h2>
+    <form action="/admin/accounts" method="get" class="account-search" data-auto-filters>
+      {{ student_search(q) }}
+      {{ filter_status() }}
+    </form>
+    <div data-filter-results>
     {% if students %}
     <form action="/admin/accounts/lote" method="post" id="account-selection" class="bulk-toolbar" data-bulk-selection>
       {{ csrf(user) }}
-      {{ bulk_controls('Todas las cuentas', [('disable', 'Inhabilitar'), ('enable', 'Reactivar'), ('delete', 'Eliminar')]) }}
+      <input type="hidden" name="q" value="{{ q }}">
+      {{ bulk_controls('Todas las cuentas del filtro' if q else 'Todas las cuentas', [('disable', 'Inhabilitar'), ('enable', 'Reactivar'), ('delete', 'Eliminar')]) }}
     </form>
     {% endif %}
     {% for student in students %}
@@ -65,8 +71,9 @@
         </details>
       </div>
     </div>
-    {% else %}<p class="empty">No hay cuentas de estudiantes en esta página.</p>{% endfor %}
-    {{ pagination('/admin/accounts', page, has_next) }}
+    {% else %}<p class="empty">{{ 'Sin cuentas para esta búsqueda.' if q else 'No hay cuentas de estudiantes en esta página.' }}</p>{% endfor %}
+    {{ pagination('/admin/accounts', page, has_next, search_params(q)) }}
+    </div>
   </section>
 </div>
 {% endblock %}

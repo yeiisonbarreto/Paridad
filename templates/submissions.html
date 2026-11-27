@@ -1,22 +1,23 @@
 {% extends "base.html" %}
-{% from "macros.html" import bulk_controls, csrf, pagination %}
+{% from "macros.html" import bulk_controls, csrf, pagination, search_params %}
 {% from "report-components.html" import results_filters, submission_table %}
 {% block title %}Archivos · Paridad{% endblock %}
 {% block head %}<script src="/static/submissions.min.js" defer></script>{% endblock %}
 {% block content %}
 <div class="page-heading"><h1>Archivos subidos</h1></div>
-{{ results_filters('/admin/submissions', labs, languages, selected_activity, selected_language) }}
-<section class="card section-gap" aria-label="Archivos subidos">
+{{ results_filters('/admin/submissions', labs, languages, selected_activity, selected_language, q) }}
+<section data-filter-results class="card section-gap" aria-label="Archivos subidos">
   {% if submissions %}
   <form action="/admin/submissions/lote" method="post" id="file-selection" class="bulk-toolbar" data-bulk-selection>
     {{ csrf(user) }}
     <input type="hidden" name="activity_id" value="{{ selected_activity or '' }}">
     <input type="hidden" name="language_id" value="{{ selected_language or '' }}">
+    <input type="hidden" name="q" value="{{ q }}">
     {{ bulk_controls('Todos los archivos del filtro', [('zip', 'Descargar ZIP'), ('delete', 'Eliminar')]) }}
   </form>
   {% endif %}
   {{ submission_table(submissions, user, selection_form='file-selection', archive=true) }}
-  {{ pagination('/admin/submissions', page, has_next, ('&activity_id=' ~ selected_activity if selected_activity else '') ~ ('&language_id=' ~ selected_language if selected_language else '')) }}
+  {{ pagination('/admin/submissions', page, has_next, ('&activity_id=' ~ selected_activity if selected_activity else '') ~ ('&language_id=' ~ selected_language if selected_language else '') ~ search_params(q)) }}
 </section>
 <dialog class="notice-dialog" id="delete-file-dialog" aria-labelledby="delete-file-title">
   <form method="dialog" class="notice-dialog-inner stack">

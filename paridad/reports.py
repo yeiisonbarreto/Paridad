@@ -8,7 +8,7 @@ from uuid import UUID
 from fastapi import APIRouter, Form, HTTPException, Query, Request
 from starlette.responses import JSONResponse, Response, StreamingResponse
 
-from .admin import ContextQuery, Csrf, PAGE_SIZE, Page, administrator
+from .admin import ContextQuery, Csrf, PAGE_SIZE, Page, SearchForm, SearchQuery, administrator, clean_student_search, student_match
 from .bulk import consume_deletion, deletion_preview
 from .file_archives import submission_bytes, submission_zip
 from .grade_routes import get_grade
@@ -32,10 +32,11 @@ SUBMISSION_LIST = """
 """
 
 
-SUBMISSION_FILTER = """
+SUBMISSION_FILTER = f"""
     WHERE (%s::bigint IS NULL OR a.id = %s) AND (%s::bigint IS NULL OR l.id = %s)
       AND (NOT %s OR s.max_similarity_bp > 100 * COALESCE(a.similarity_threshold, cfg.similarity_threshold)
           OR (s.ai_credit IS NULL AND s.ai_bp > 100 * COALESCE(a.ai_threshold, cfg.ai_threshold)))
+      AND {student_match("u")}
 """
 
 PAIR_LIST = """
@@ -51,9 +52,11 @@ PAIR_LIST = """
     WHERE (%s::bigint IS NULL OR a.id = %s) AND (%s::bigint IS NULL OR l.id = %s)
       AND (NOT %s OR p.score_bp > 100 * COALESCE(a.similarity_threshold, cfg.similarity_threshold))
 """
+PAIR_STUDENT_FILTER = f" AND ({student_match('ul')} OR {student_match('ur')})"
+
 
 # Optional selection shared by the Excel preflight and its streamed worksheets.
-EXPORT_PAIRS = PAIR_LIST + " AND (%s::uuid[] IS NULL OR p.left_id = ANY(%s) OR p.right_id = ANY(%s))"
+EXPORT_PAIRS = PAIR_LIST + PAIR_STUDENT_FILTER + " AND (%s::uuid[] IS NULL OR p.left_id = ANY(%s) OR p.right_id = ANY(%s))"
 EXPORT_SUBMISSIONS = SUBMISSION_LIST + SUBMISSION_FILTER + " AND (%s::uuid[] IS NULL OR s.id = ANY(%s))"
 PAIR_ORDER = " ORDER BY p.score_bp DESC, p.left_id, p.right_id"
 FRAGMENT_PAGE_LINES = 60
@@ -84,14 +87,14 @@ def context_params(filters: dict) -> tuple:
     return activity, activity, language, language
 
 
-def submission_page(conn, context, page: int, *, alerts_only: bool = False):
+def submission_page(conn, context, page: int, search: str, *, alerts_only: bool = False):
     return conn.execute(
         SUBMISSION_LIST + SUBMISSION_FILTER + " ORDER BY s.created_at DESC, s.id DESC LIMIT %s OFFSET %s",
-        (*context, alerts_only, PAGE_SIZE + 1, (page - 1) * PAGE_SIZE),
+        (*context, alerts_only, search, PAGE_SIZE + 1, (page - 1) * PAGE_SIZE),
     ).fetchall()
 
 
-def group_page(conn, filters, context, page: int):
+def group_page(conn, filters, context, page: int, search: str):
     with conn.cursor(name="report_similarity_groups") as cursor:
         cursor.itersize = 800
         cursor.execute(
@@ -107,6 +110,16 @@ def group_page(conn, filters, context, page: int):
             similarity_groups(cursor),
             key=lambda group: (-group.max_score, group.activity_id, group.language_id, group.members[0][0]),
         )
+    if search and groups:
+        matching_ids = {
+            row["id"] for row in conn.execute(
+                f"""SELECT s.id FROM submissions s JOIN users u ON u.id = s.student_id
+                    WHERE (%s::bigint IS NULL OR s.activity_id = %s)
+                      AND (%s::bigint IS NULL OR s.language_id = %s) AND {student_match("u")}""",
+                (*context, search),
+            )
+        }
+        groups = [group for group in groups if any(item in matching_ids for item, _ in group.members)]
     offset = (page - 1) * PAGE_SIZE
     window = groups[offset:offset + PAGE_SIZE]
     if not window:
@@ -133,32 +146,33 @@ def group_page(conn, filters, context, page: int):
 @router.get("/reports")
 def reports(
     request: Request, activity_id: ContextQuery = "", language_id: ContextQuery = "",
-    alerts_only: bool = False, page: Page = 1,
+    alerts_only: bool = False, page: Page = 1, q: SearchQuery = "",
 ):
+    q = clean_student_search(q)
     with request.app.state.pool.connection() as conn:
         # Use one snapshot for groups and their members, including during deletions.
         conn.execute("SET TRANSACTION ISOLATION LEVEL REPEATABLE READ")
         user = administrator(conn, request)
         filters = filter_choices(conn, activity_id, language_id)
         context = context_params(filters)
-        groups, groups_next = group_page(conn, filters, context, page)
+        groups, groups_next = group_page(conn, filters, context, page, q)
         pairs = conn.execute(
-            PAIR_LIST + PAIR_ORDER + " LIMIT %s OFFSET %s",
-            (*context, alerts_only, PAGE_SIZE + 1, (page - 1) * PAGE_SIZE),
+            PAIR_LIST + PAIR_STUDENT_FILTER + PAIR_ORDER + " LIMIT %s OFFSET %s",
+            (*context, alerts_only, q, q, PAGE_SIZE + 1, (page - 1) * PAGE_SIZE),
         ).fetchall()
-        submissions = submission_page(conn, context, page, alerts_only=alerts_only)
+        submissions = submission_page(conn, context, page, q, alerts_only=alerts_only)
     return view(
         request, "reports.html", user=user, **filters, alerts_only=alerts_only, groups=groups,
-        pairs=pairs[:PAGE_SIZE], submissions=submissions[:PAGE_SIZE], page=page,
+        pairs=pairs[:PAGE_SIZE], submissions=submissions[:PAGE_SIZE], page=page, q=q,
         has_next=groups_next or len(pairs) > PAGE_SIZE or len(submissions) > PAGE_SIZE,
     )
 
 
-def comparison_export_rows(conn, parameters, selection):
+def comparison_export_rows(conn, parameters, search, selection):
     with conn.cursor(name="report_excel_pairs") as cursor:
         cursor.itersize = 400
         cursor.execute(EXPORT_PAIRS + PAIR_ORDER + " LIMIT %s",
-                       (*parameters, selection, selection, selection, MAX_SHEET_ROWS - 1))
+                       (*parameters, search, search, selection, selection, selection, MAX_SHEET_ROWS - 1))
         for item in cursor:
             yield (
                 item["code"], item["language"], item["left_username"], item["left_name"], item["left_filename"],
@@ -168,11 +182,11 @@ def comparison_export_rows(conn, parameters, selection):
             )
 
 
-def submission_export_rows(conn, parameters, selection):
+def submission_export_rows(conn, parameters, search, selection):
     with conn.cursor(name="report_excel_submissions") as cursor:
         cursor.itersize = 400
         cursor.execute(EXPORT_SUBMISSIONS + " ORDER BY s.created_at DESC, s.id DESC LIMIT %s",
-                       (*parameters, selection, selection, MAX_SHEET_ROWS - 1))
+                       (*parameters, search, selection, selection, MAX_SHEET_ROWS - 1))
         for item in cursor:
             completed = item["state"] == "completed"
             yield (
@@ -186,7 +200,7 @@ def submission_export_rows(conn, parameters, selection):
             )
 
 
-def export_workbook(pool, parameters, selection):
+def export_workbook(pool, parameters, search, selection):
     with pool.connection() as conn:
         conn.execute("SET TRANSACTION ISOLATION LEVEL REPEATABLE READ")
         sheets = (
@@ -194,28 +208,28 @@ def export_workbook(pool, parameters, selection):
                 "Comparaciones",
                 ("Actividad", "Lenguaje", "Usuario A", "Estudiante A", "Archivo A", "Usuario B", "Estudiante B",
                  "Archivo B", "Similitud", "Umbral de similitud", "Estado"),
-                comparison_export_rows(conn, parameters, selection),
+                comparison_export_rows(conn, parameters, search, selection),
             ),
             (
                 "Entregas",
                 ("Actividad", "Lenguaje", "Usuario", "Estudiante", "Archivo", "Estado",
                  "Similitud máxima", "Umbral de similitud", "Indicio de IA", "Umbral de IA", "IA declarada",
                  "Crédito de IA", "Revisión de IA", "Nota automática (0–50)", "Nota docente (0–50)", "Nota final (0–50)"),
-                submission_export_rows(conn, parameters, selection),
+                submission_export_rows(conn, parameters, search, selection),
             ),
         )
         yield from report_excel(sheets)
 
 
-def report_download(request, activity_id, language_id, alerts_only, selection=None, csrf=None):
+def report_download(request, activity_id, language_id, alerts_only, search, selection=None, csrf=None):
     pool = request.app.state.pool
     with pool.connection() as conn:
         administrator(conn, request, csrf)
         activity, language = optional_context_id(activity_id), optional_context_id(language_id)
         parameters = (activity, activity, language, language, alerts_only)
         for query, ids in (
-            (EXPORT_PAIRS, (selection, selection, selection)),
-            (EXPORT_SUBMISSIONS, (selection, selection)),
+            (EXPORT_PAIRS, (search, search, selection, selection, selection)),
+            (EXPORT_SUBMISSIONS, (search, selection, selection)),
         ):
             count = conn.execute(
                 f"SELECT count(*) AS total FROM ({query} LIMIT %s) AS report_rows",
@@ -226,15 +240,15 @@ def report_download(request, activity_id, language_id, alerts_only, selection=No
             if query == EXPORT_SUBMISSIONS and selection is not None and count != len(selection):
                 raise HTTPException(409, "La selección cambió. Vuelve a seleccionar los archivos.")
     return StreamingResponse(
-        export_workbook(pool, parameters, selection), media_type=XLSX_MEDIA_TYPE,
+        export_workbook(pool, parameters, search, selection), media_type=XLSX_MEDIA_TYPE,
         headers={"Content-Disposition": 'attachment; filename="paridad-informes.xlsx"'},
     )
 
 
 @router.get("/reports/exportar")
 def export_reports(request: Request, activity_id: ContextQuery = "", language_id: ContextQuery = "",
-                   alerts_only: bool = False):
-    return report_download(request, activity_id, language_id, alerts_only)
+                   alerts_only: bool = False, q: SearchQuery = ""):
+    return report_download(request, activity_id, language_id, alerts_only, clean_student_search(q))
 
 
 @router.post("/reports/exportar")
@@ -243,20 +257,25 @@ def export_selected_reports(
     selection: Annotated[list[UUID], Form()] = [], all_results: Annotated[bool, Form()] = False,
     activity_id: Annotated[str, Form(max_length=19)] = "",
     language_id: Annotated[str, Form(max_length=19)] = "", alerts_only: Annotated[bool, Form()] = False,
+    q: SearchForm = "",
 ):
     chosen = sorted(set(selection)) if selection and not all_results else None
-    return report_download(request, activity_id, language_id, alerts_only, chosen, csrf)
+    return report_download(request, activity_id, language_id, alerts_only, clean_student_search(q), chosen, csrf)
 
 
 @router.get("/submissions")
-def submissions_list(request: Request, activity_id: ContextQuery = "", language_id: ContextQuery = "", page: Page = 1):
+def submissions_list(
+    request: Request, activity_id: ContextQuery = "", language_id: ContextQuery = "", page: Page = 1,
+    q: SearchQuery = "",
+):
+    q = clean_student_search(q)
     with request.app.state.pool.connection() as conn:
         user = administrator(conn, request)
         filters = filter_choices(conn, activity_id, language_id)
-        submissions = submission_page(conn, context_params(filters), page)
+        submissions = submission_page(conn, context_params(filters), page, q)
     return view(
         request, "submissions.html", user=user, **filters, submissions=submissions[:PAGE_SIZE],
-        page=page, has_next=len(submissions) > PAGE_SIZE,
+        page=page, has_next=len(submissions) > PAGE_SIZE, q=q,
     )
 
 
@@ -267,8 +286,9 @@ def send_review_notices(
     activity_id: Annotated[str, Form(max_length=19)] = "",
     language_id: Annotated[str, Form(max_length=19)] = "", alerts_only: Annotated[bool, Form()] = False,
     destination: Annotated[Literal["reports", "submissions"], Form()] = "reports",
-    preview: Annotated[bool, Form()] = False,
+    preview: Annotated[bool, Form()] = False, q: SearchForm = "",
 ):
+    q = clean_student_search(q)
     with request.app.state.pool.connection() as conn:
         user = administrator(conn, request, csrf)
         activity, language = optional_context_id(activity_id), optional_context_id(language_id)
@@ -276,8 +296,8 @@ def send_review_notices(
         rows = conn.execute(
             """SELECT s.id, s.student_id FROM submissions s
                JOIN activities a ON a.id = s.activity_id JOIN languages l ON l.id = s.language_id
-               CROSS JOIN settings cfg""" + SUBMISSION_FILTER + " AND (%s::uuid[] IS NULL OR s.id = ANY(%s))",
-            (activity, activity, language, language, alerts_only, ids, ids),
+               JOIN users u ON u.id = s.student_id CROSS JOIN settings cfg""" + SUBMISSION_FILTER + " AND (%s::uuid[] IS NULL OR s.id = ANY(%s))",
+            (activity, activity, language, language, alerts_only, q, ids, ids),
         ).fetchall()
         if not rows:
             raise HTTPException(400, "Selecciona al menos un archivo.")
@@ -287,7 +307,7 @@ def send_review_notices(
         if preview:
             return view(request, "notices-confirm.html", user=user, total=len(students),
                         destination=destination, selection=ids or [], all_results=all_results,
-                        activity_id=activity_id, language_id=language_id, alerts_only=alerts_only)
+                        activity_id=activity_id, language_id=language_id, alerts_only=alerts_only, q=q)
         published = publish_manual(conn, [row["id"] for row in rows])
     skipped = len(students) - published
     if wants_json(request):
@@ -313,6 +333,7 @@ def bulk_submissions(
     selection: Annotated[list[UUID], Form()] = [], all_results: Annotated[bool, Form()] = False,
     activity_id: Annotated[str, Form(max_length=19)] = "",
     language_id: Annotated[str, Form(max_length=19)] = "",
+    q: SearchForm = "",
 ):
     pool = request.app.state.pool
     with pool.connection() as conn:
@@ -320,10 +341,10 @@ def bulk_submissions(
         activity, language = optional_context_id(activity_id), optional_context_id(language_id)
         requested = None if all_results else sorted(set(selection))
         ids = [row["id"] for row in conn.execute(
-            """SELECT id FROM submissions WHERE (%s::bigint IS NULL OR activity_id = %s)
-                 AND (%s::bigint IS NULL OR language_id = %s)
-                 AND (%s::uuid[] IS NULL OR id = ANY(%s)) ORDER BY id""",
-            (activity, activity, language, language, requested, requested),
+            f"""SELECT s.id FROM submissions s JOIN users u ON u.id = s.student_id
+                WHERE (%s::bigint IS NULL OR s.activity_id = %s) AND (%s::bigint IS NULL OR s.language_id = %s)
+                  AND {student_match("u")} AND (%s::uuid[] IS NULL OR s.id = ANY(%s)) ORDER BY s.id""",
+            (activity, activity, language, language, clean_student_search(q), requested, requested),
         )]
         if requested is not None and ids != requested:
             raise HTTPException(409, "La selección cambió. Vuelve a seleccionar los archivos.")

@@ -76,8 +76,6 @@ def dashboard(
             """SELECT m.* FROM modules m WHERE EXISTS (SELECT 1 FROM activities a WHERE a.module_id = m.id)
                ORDER BY m.code""",
         ).fetchall()
-        if module_id is None and len(modules) == 1:
-            module_id = modules[0]["id"]
         chosen = next((module for module in modules if module["id"] == module_id), None)
         deliveries = conn.execute(
             "SELECT * FROM activities WHERE module_id = %s ORDER BY code", (module_id,),
@@ -167,14 +165,12 @@ def submit(
             "SELECT id FROM users WHERE id = %s AND active FOR NO KEY UPDATE", (user_id,),
         ).fetchone():
             raise HTTPException(403, "La cuenta está inhabilitada.")
-        previous = conn.execute(
-            """SELECT a.module_id FROM submissions s JOIN activities a ON a.id = s.activity_id
-               WHERE s.student_id = %s AND s.request_id = %s""", (user_id, request_id),
-        ).fetchone()
-        if previous:
-            return redirect(f"/student?module_id={previous['module_id']}")
+        if conn.execute(
+            "SELECT 1 FROM submissions WHERE student_id = %s AND request_id = %s", (user_id, request_id),
+        ).fetchone():
+            return redirect("/student")
         activity = conn.execute(
-            "SELECT module_id, is_open, opens_at, closes_at FROM activities WHERE id = %s FOR SHARE", (activity_id,)
+            "SELECT is_open, opens_at, closes_at FROM activities WHERE id = %s FOR SHARE", (activity_id,)
         ).fetchone()
         if not activity or not activity["is_open"]:
             raise HTTPException(400, "La actividad no admite entregas.")
@@ -209,7 +205,7 @@ def submit(
                VALUES (%s, %s, %s, %s, %s, %s, %s, %s) ON CONFLICT (student_id, request_id) DO NOTHING""",
             (activity_id, language_id, user_id, request_id, filename, source, source_bytes, ai_credit or None),
         )
-    return redirect(f"/student?module_id={activity['module_id']}")
+    return redirect("/student")
 
 
 def check_delivery_window(activity: dict, now: datetime) -> None:

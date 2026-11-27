@@ -1,19 +1,21 @@
 {% extends "base.html" %}
-{% from "macros.html" import pagination %}
+{% from "macros.html" import pagination, student_search, filter_status, search_params %}
 {% from "grade-components.html" import clarification_status %}
 {% block title %}Aclaraciones · Paridad{% endblock %}
 {% block content %}
 <div class="page-heading"><a class="button secondary back-button" href="/admin/reports">Volver a informes</a><h1>Aclaraciones</h1></div>
 <section class="card">
-  <form method="get" action="/admin/aclaraciones" class="clarification-filters">
-    <label for="clarification-state">Estado</label>
-    <select id="clarification-state" name="state">
-      <option value="pending"{% if filter_state == 'pending' %} selected{% endif %}>Pendientes</option>
-      <option value="all"{% if filter_state == 'all' %} selected{% endif %}>Todas</option>
-    </select>
-    <button type="submit" class="button secondary">Filtrar</button>
+  <form method="get" action="/admin/aclaraciones" class="filters" data-auto-filters>
+    {{ student_search(q) }}
+    <label class="field">Estado
+      <select id="clarification-state" name="state">
+        <option value="pending"{% if filter_state == 'pending' %} selected{% endif %}>Pendientes</option>
+        <option value="all"{% if filter_state == 'all' %} selected{% endif %}>Todas</option>
+      </select>
+    </label>
+    {{ filter_status() }}
   </form>
-  <div id="clarification-requests">
+  <div id="clarification-requests" data-filter-results>
   {% if rows %}
   <div class="table-wrap" role="region" aria-label="Solicitudes de aclaración" tabindex="0">
     <table>
@@ -29,7 +31,7 @@
     </table>
   </div>
   {% else %}<p class="empty">Sin solicitudes para este filtro.</p>{% endif %}
-  {{ pagination('/admin/aclaraciones', page, has_next, '&state=' ~ filter_state) }}
+  {{ pagination('/admin/aclaraciones', page, has_next, '&state=' ~ filter_state ~ search_params(q)) }}
   </div>
 </section>
 {% endblock %}

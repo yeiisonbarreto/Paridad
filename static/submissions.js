@@ -28,8 +28,8 @@ if (fileDeletionDialog?.showModal) {
       `Se eliminará «${name}» junto con sus comparaciones.`);
   });
 
-  document.querySelector("#file-selection")?.addEventListener("submit", async event => {
-    if (event.submitter?.value !== "delete") return;
+  document.addEventListener("submit", async event => {
+    if (event.target.id !== "file-selection" || event.submitter?.value !== "delete") return;
     event.preventDefault();
     if (busy || fileDeletionDialog.open) return;
     busy = true;

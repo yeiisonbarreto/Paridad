@@ -50,3 +50,25 @@
     {% endfor %}
   </fieldset>
 {% endmacro %}
+
+
+{% macro student_search(q) %}
+<label class="field search-field">Buscar estudiante
+  <input type="search" name="q" value="{{ q }}" maxlength="120" placeholder="Nombre o ID" autocomplete="off">
+</label>
+{% endmacro %}
+
+{% macro filter_status() %}
+<p class="field-help filter-status" data-filter-status role="status"></p>
+<noscript><button type="submit" class="button secondary">Aplicar búsqueda y filtros</button></noscript>
+{% endmacro %}
+
+{% macro search_params(q) %}{% if q %}&q={{ q|urlencode }}{% endif %}{% endmacro %}
+
+
+{% macro avatar(student) %}
+{% set tone, cells = avatar_pattern(student.id) %}
+<span class="student-avatar avatar-tone-{{ tone }}" aria-hidden="true">
+  {% for filled in cells %}<span{% if filled %} class="avatar-pixel"{% endif %}></span>{% endfor %}
+</span>
+{% endmacro %}

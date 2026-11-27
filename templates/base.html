@@ -1,4 +1,4 @@
-{% from "macros.html" import paridad_mark, school_logo %}
+{% from "macros.html" import paridad_mark, school_logo, avatar %}
 <!doctype html>
 <html lang="es">
 <head>
@@ -11,7 +11,9 @@
   {% if user and user.role in ['STUDENT', 'ADMIN'] %}
   <script src="/static/notices-ui.min.js" defer></script>
   {% endif %}
-  {% if user and user.role == 'ADMIN' %}<script src="/static/admin-actions.min.js" defer></script>{% endif %}
+  {% if user and (user.role == 'ADMIN' or request.url.path == '/student') %}
+  <script src="/static/record-actions.min.js" defer></script>
+  {% endif %}
   {% if user and user.role == 'STUDENT' %}<script src="/static/student.min.js" defer></script>{% endif %}
   {% block head %}{% endblock %}
 </head>
@@ -53,7 +55,8 @@
       {% if user %}
       <details class="dropdown account-menu" name="header-menu" data-dropdown>
         <summary class="menu-trigger" aria-label="Cuenta de {{ user.display_name }}">
-          <span class="account-initial" aria-hidden="true">{{ user.display_name[:1]|upper }}</span>
+          {% if user.role == 'STUDENT' %}{{ avatar(user) }}
+          {% else %}<span class="account-initial" aria-hidden="true">{{ user.display_name[:1]|upper }}</span>{% endif %}
           <span class="account-name">{{ user.display_name }}</span>
         </summary>
         <div class="menu-panel account-panel">
@@ -73,8 +76,8 @@
   </header>
   {% endblock %}
   <main class="shell content" id="main">{% block content %}{% endblock %}</main>
-  {% if user and user.role == 'ADMIN' and (request.url.path.startswith('/admin/accounts') or request.url.path.startswith('/admin/activities')) %}
-  <dialog class="notice-dialog record-dialog" id="record-action-dialog" aria-label="Acción de administración">
+  {% if user and (request.url.path == '/student' or request.url.path.startswith('/admin/accounts') or request.url.path.startswith('/admin/activities')) %}
+  <dialog class="notice-dialog record-dialog" id="record-action-dialog" aria-label="Ventana de Paridad">
     <div class="notice-dialog-inner">
       <p class="callout alert" data-record-error role="alert" hidden></p>
       <p data-record-loading role="status" hidden>Cargando…</p>

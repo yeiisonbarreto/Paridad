@@ -24,6 +24,19 @@ Name = Annotated[str, Form(max_length=120)]
 Threshold = Annotated[int, Form(ge=0, le=100)]
 Page = Annotated[int, Query(ge=1, le=10000)]
 ContextQuery = Annotated[str, Query(max_length=19)]
+SearchQuery = Annotated[str, Query(max_length=120)]
+SearchForm = Annotated[str, Form(max_length=120)]
+
+
+def clean_student_search(value: str) -> str:
+    if "\x00" in value:
+        raise HTTPException(400, "Escribe un nombre o ID válido.")
+    return value.strip()
+
+
+def student_match(alias: str) -> str:
+    """Match the account ID or display name literally. The alias comes from the query."""
+    return f"strpos(lower({alias}.display_name || chr(10) || {alias}.username), lower(%s)) > 0"
 
 
 def administrator(conn, request, csrf=None):
