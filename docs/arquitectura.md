@@ -19,9 +19,9 @@ flowchart LR
     P --> D["PostgreSQL · resultados actualizados"]
     D -->|"Consulta por propietario"| S["Historial del estudiante"]
     D -->|"Consulta con rol ADMIN"| A["Informe docente · pares, fragmentos y señales de IA"]
-    D -->|"Supera el umbral"| O["PostgreSQL · cola de avisos"]
+    D -->|"Supera el umbral"| O["PostgreSQL · avisos privados"]
     A -->|"Envío manual"| O
-    O --> SMTP["Correo saliente · Postfix propio o relay SMTP"]
+    O --> S
     S -->|"Una solicitud por entrega"| R["Aclaración y respuesta docente"]
     A --> R
 ```
@@ -64,7 +64,7 @@ erDiagram
 | `submissions` | UUID, estudiante, ámbito, nombre, fuente, bytes originales si están disponibles, crédito, estado, intentos, versión, tokens, mapa de líneas, indicio IA, máxima similitud, rúbrica y nota docente | FK al ámbito; idempotencia por estudiante; índices para historial, cola y entregas completadas |
 | `similarity_pairs` | Ámbito, dos UUID, sus propietarios, resultado, métricas y fragmentos JSONB | PK de UUID ordenados, propietarios distintos, dos FK compuestas al mismo ámbito, índice de informe y extremo derecho |
 | `grade_clarifications` | Entrega, nota al solicitar, motivo, comentarios, estado y respuesta | PK por entrega, índice de solicitudes por estado y fecha |
-| `review_notices` | Destinatario, entrega en avisos automáticos, causas, estado e intentos | Cola de pendientes e índice por estudiante |
+| `review_notices` | Destinatario, entrega en avisos automáticos, causas y fecha de lectura | Índices de historial y de avisos sin leer por estudiante |
 | `schema_migrations` | Nombre del SQL aplicado y fecha | PK por nombre de migración |
 
 El código de la actividad distingue los laboratorios y puede incluir curso o grupo. Cada actividad tiene un conjunto de perfiles habilitados. El módulo de administración conserva los vínculos que ya tienen entregas. El SQL ejecutable está en [las migraciones](../migrations).
@@ -118,12 +118,13 @@ La nota automática suma hasta 15 puntos de estructura, 10 de prácticas, 10 de 
 | `/student` | GET | Estudiante. Actividades abiertas e historial propio. |
 | `/student/submissions` | POST | Estudiante. Propietario obtenido de la sesión, combinación habilitada, idempotencia y límite de tasa. |
 | `/student/submissions/{id}/nota`, `/student/submissions/{id}/aclaracion` | GET, POST | Estudiante. Nota propia y una solicitud por entrega. |
+| `/student/avisos`, `/student/avisos/leer` | GET, POST | Estudiante. Bandeja propia y registro de lectura. |
 | `/api/student/submissions` | GET | Estudiante. Proyección tipada de su propio historial, sin registros de pares, identidades de terceros ni fuentes. |
 | `/admin`, `/admin/settings` | GET, POST respectivamente | Administrador. Panel y umbrales globales. |
 | `/admin/perfil` | GET/POST | Administrador. Cambio de usuario y contraseña con confirmación de contraseña actual. |
 | `/admin/accounts`, `/admin/accounts/{id}` | GET/POST, POST respectivamente | Administrador. Alta, actualización, estado, rotación de contraseña y revocación de sesiones de estudiantes. |
 | `/admin/accounts/plantilla`, `/admin/accounts/importar` | GET, POST | Administrador. Plantilla e importación transaccional de Excel con descarga de contraseñas iniciales. |
-| `/admin/accounts/{id}/eliminar`, `/admin/accounts/{id}/invitacion` | GET/POST, POST | Administrador. Confirmación y borrado definitivo, o envío individual de una invitación. |
+| `/admin/accounts/{id}/eliminar`, `/admin/accounts/{id}/invitacion` | GET/POST, POST | Administrador. Confirmación y borrado definitivo o generación de un enlace de invitación. |
 | `/invitacion` | GET/POST | Estudiante con token válido. Configuración de contraseña con un enlace de un solo uso. |
 | `/admin/activities`, `/admin/activities/{id}`, `/admin/languages` | GET/POST, POST, POST | Administrador. Actividades, umbrales por actividad y perfiles configurables. |
 | `/admin/reports`, `/admin/reports/{izq}/{der}` | GET | Administrador. Grupos, comparaciones y fragmentos. |

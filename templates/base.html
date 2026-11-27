@@ -8,6 +8,7 @@
   <title>{% block title %}Paridad{% endblock %}</title>
   <link rel="stylesheet" href="/static/paridad.css">
   <script src="/static/navigation.min.js" defer></script>
+  {% if user and user.role == 'STUDENT' %}<script src="/static/student.min.js" defer></script>{% endif %}
   {% block head %}{% endblock %}
 </head>
 <body class="{% block body_class %}{% endblock %}">
@@ -33,6 +34,12 @@
           <li><a href="{{ url }}" {% if current == label %}aria-current="page"{% endif %}>{{ label }}</a></li>
           {% endfor %}
         </ul>
+      </nav>
+      {% elif user and user.role == 'STUDENT' %}
+      <nav class="student-nav" aria-label="Estudiante">
+        <a href="/student/avisos" class="student-notice-link"{% if request.url.path == '/student/avisos' %} aria-current="page"{% endif %}>
+          Avisos<span id="student-notice-count" aria-live="polite">{% if user.unread_notices %}<span class="notice-count"><span class="screen-reader-only"> sin leer </span>{{ user.unread_notices }}</span>{% endif %}</span>
+        </a>
       </nav>
       {% endif %}
       {% if user %}

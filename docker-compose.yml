@@ -56,12 +56,6 @@ services:
       PARIDAD_SCOPE_LIMIT: ${PARIDAD_SCOPE_LIMIT:-250}
       PARIDAD_TIME_ZONE: ${PARIDAD_TIME_ZONE:-America/Bogota}
       CLIENT_DETERRENCE: ${CLIENT_DETERRENCE:-true}
-      PARIDAD_NOTICE_FROM: ${PARIDAD_NOTICE_FROM:-}
-      PARIDAD_SMTP_HOST: ${PARIDAD_SMTP_HOST:-}
-      PARIDAD_SMTP_PORT: ${PARIDAD_SMTP_PORT:-587}
-      PARIDAD_SMTP_FROM: ${PARIDAD_SMTP_FROM:-}
-      PARIDAD_SMTP_USERNAME: ${PARIDAD_SMTP_USERNAME:-}
-      PARIDAD_SMTP_PASSWORD: ${PARIDAD_SMTP_PASSWORD:-}
     networks:
       - database
       - edge
@@ -87,16 +81,6 @@ services:
     <<: *runtime
     pull_policy: never
     command: ["python", "-m", "paridad.worker"]
-    environment:
-      <<: *runtime-env
-      PARIDAD_NOTICE_FROM: ${PARIDAD_NOTICE_FROM:-}
-      PARIDAD_SMTP_HOST: ${PARIDAD_SMTP_HOST:-}
-      PARIDAD_SMTP_PORT: ${PARIDAD_SMTP_PORT:-587}
-      PARIDAD_SMTP_USERNAME: ${PARIDAD_SMTP_USERNAME:-}
-      PARIDAD_SMTP_PASSWORD: ${PARIDAD_SMTP_PASSWORD:-}
-    networks:
-      - database
-      - mail_egress
     depends_on:
       migrate:
         condition: service_completed_successfully
@@ -123,7 +107,6 @@ networks:
   database:
     internal: true
   edge:
-  mail_egress:
 
 volumes:
   pgdata:

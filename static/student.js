@@ -51,7 +51,7 @@ if (document.querySelector("[data-deterrence]")) {
 
 let polling = false;
 window.setInterval(async () => {
-  if (polling || document.hidden || document.querySelector("#own-history :focus")) return;
+  if (polling || document.hidden) return;
   polling = true;
   try {
     const response = await fetch(window.location.href, { cache: "no-store" });
@@ -61,11 +61,13 @@ window.setInterval(async () => {
     }
     if (!response.ok) return;
     const next = new DOMParser().parseFromString(await response.text(), "text/html");
-    const history = document.querySelector(".history");
-    const updated = next.querySelector(".history");
-    if (history && updated && history.innerHTML !== updated.innerHTML &&
-        !history.contains(document.activeElement)) {
-      history.replaceWith(updated);
+    for (const selector of [".history", "#notice-inbox", "#student-notice-count"]) {
+      const current = document.querySelector(selector);
+      const updated = next.querySelector(selector);
+      if (current && updated && current.innerHTML !== updated.innerHTML &&
+          !current.contains(document.activeElement)) {
+        current.innerHTML = updated.innerHTML;
+      }
     }
   } catch {
     // A temporary network failure will be retried on the next poll.

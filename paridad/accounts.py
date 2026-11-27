@@ -1,7 +1,6 @@
 """Administrator management of student accounts and roster imports."""
 
 import secrets
-import smtplib
 from typing import Annotated, Literal
 from uuid import UUID
 
@@ -11,10 +10,10 @@ from starlette.responses import Response
 
 from .admin import Csrf, Name, PAGE_SIZE, Page, administrator, required_text
 from .bulk import consume_deletion, deletion_preview
-from .config import MAX_FILE_BYTES
-from .invitations import create_invitation, mail_enabled, send_invitation_email
+from .config import MAX_FILE_BYTES, PUBLIC_ORIGIN
+from .invitations import create_invitation
 from .roster import MAX_ROSTER_ROWS, XLSX_MEDIA_TYPE, RosterError, parse_roster, workbook_bytes
-from .security import PASSWORDS, USERNAME, check_rate, normalized_email, normalized_username, token_digest, valid_password
+from .security import PASSWORDS, USERNAME, check_rate, normalized_email, normalized_username, valid_password
 from .submission_records import delete_submissions, lock_submission_scopes
 from .web import redirect, view
 
@@ -51,7 +50,7 @@ def excel_file(contents: bytes, filename: str) -> Response:
 
 
 @router.get("")
-def accounts(request: Request, page: Page = 1, invitacion: str = ""):
+def accounts(request: Request, page: Page = 1):
     with request.app.state.pool.connection() as conn:
         user = administrator(conn, request)
         students = conn.execute(
@@ -62,7 +61,6 @@ def accounts(request: Request, page: Page = 1, invitacion: str = ""):
     return view(
         request, "accounts.html", user=user, students=students[:PAGE_SIZE],
         page=page, has_next=len(students) > PAGE_SIZE, roster_limit=MAX_ROSTER_ROWS,
-        mail_enabled=mail_enabled(), invitation_sent=invitacion == "enviada",
     )
 
 
@@ -228,26 +226,16 @@ def invite_student(request: Request, student_id: int, csrf: Csrf):
     with pool.connection() as conn:
         administrator(conn, request, csrf)
         student_account(conn, student_id)
-        if not mail_enabled():
-            raise HTTPException(409, "Habilita SMTP y una URL HTTPS de Paridad para enviar invitaciones.")
     check_rate(pool, "send-invite", str(student_id), 5, 3600)
 
     with pool.connection() as conn:
-        administrator(conn, request, csrf)
+        user = administrator(conn, request, csrf)
         student = student_account(conn, student_id, lock=True)
-        if not student["active"] or not student["email"]:
-            raise HTTPException(409, "La cuenta debe estar activa y tener un correo electrónico.")
+        if not student["active"]:
+            raise HTTPException(409, "La cuenta debe estar activa para generar una invitación.")
         token = create_invitation(conn, student_id)
-    try:
-        send_invitation_email(student["email"], student["username"], token)
-    except (OSError, smtplib.SMTPException, ValueError) as exc:
-        with pool.connection() as conn:
-            conn.execute(
-                "DELETE FROM student_invitations WHERE user_id = %s AND token_hash = %s",
-                (student_id, token_digest(token)),
-            )
-        raise HTTPException(502, "No se pudo enviar la invitación. Revisa la configuración de correo e inténtalo de nuevo.") from exc
-    return redirect("/admin/accounts?invitacion=enviada")
+    return view(request, "invitation-link.html", user=user, student=student,
+                invitation=f"{PUBLIC_ORIGIN}/invitacion?token={token}")
 
 
 @router.get("/{student_id}/eliminar")

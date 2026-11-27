@@ -33,7 +33,7 @@ El volumen `pgdata` conserva los datos al detener el proyecto. La aplicación y 
 
 ## Actualizar una instalación
 
-Actualiza el código en la misma carpeta donde ya ejecutas Paridad y conserva su archivo `.env`. Después ejecuta `docker compose --env-file .env up -d --build --wait` desde esa carpeta. El servicio de migraciones aplicará el nuevo esquema sobre el volumen existente.
+Actualiza el código en la misma carpeta donde ya ejecutas Paridad y conserva su archivo `.env`. Después ejecuta `docker compose --env-file .env up -d --build --wait --remove-orphans` desde esa carpeta. El servicio de migraciones aplicará el nuevo esquema sobre el volumen existente.
 
 Si el PNG original se llama `Logotipo Paridad_….png` y está junto a `Dockerfile`, Docker lo incorpora al reconstruir la imagen. También puedes colocarlo directamente en `static/paridad-logo.png`.
 
@@ -45,7 +45,7 @@ Para importar, descarga la plantilla en **Cuentas → Importar estudiantes**. Co
 
 Tras importar, guarda `paridad-credenciales.xlsx`. Contiene el ID que se usa para iniciar sesión y una contraseña inicial aleatoria distinta por estudiante. El archivo se entrega al importar. PostgreSQL guarda los hashes y el administrador puede restablecer contraseñas desde **Cuentas**. Recarga la página para ver las cuentas nuevas.
 
-Para que un estudiante elija su propia contraseña, configura el envío SMTP descrito en [Despliegue y Moodle](docs/despliegue-moodle.md) y pulsa **Enviar invitación por correo** desde su cuenta. El estudiante recibe un enlace de un solo uso, válido durante 24 horas. Puede abrirlo y elegir su contraseña. Volver a enviar la invitación reemplaza el enlace anterior.
+Para que un estudiante elija su contraseña, abre su cuenta y pulsa **Generar enlace de invitación**. El enlace es personal, sirve una vez y caduca en 24 horas. Generar otro reemplaza el anterior.
 
 ## Cuenta y entregas del administrador
 
@@ -61,7 +61,7 @@ Cada estudiante puede tener hasta tres archivos en total. El administrador puede
 
 El estudiante consulta el desglose desde su historial y puede solicitar una aclaración por archivo. En **Aclaraciones**, en el menú superior, el administrador puede responder, resolver o rechazar la solicitud y ajustar la nota. El Excel distingue la nota automática, la docente y la final.
 
-En **Informes → Entregas** puedes seleccionar archivos y pulsar **Enviar aviso** para enviar un correo por estudiante. En **Archivos**, el menú **Acciones** permite enviar un aviso individual. Para enviar avisos manuales y automáticos, configura `PARIDAD_NOTICE_FROM` y usa el servicio de salida de Paridad o un relay SMTP. [Configuración de correo](docs/despliegue-moodle.md#avisos-de-revisión-e-invitaciones-por-correo)
+En **Informes → Entregas** puedes seleccionar archivos y pulsar **Enviar aviso** para publicar un mensaje por estudiante. En **Archivos**, el menú **Acciones** permite publicar un aviso individual. Los estudiantes consultan los avisos automáticos y manuales en **Avisos** y pueden marcarlos como leídos.
 
 ## Estructura
 

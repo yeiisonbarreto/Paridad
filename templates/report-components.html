@@ -29,7 +29,7 @@
 {% if reports %}</section>{% else %}</details>{% endif %}
 {% endmacro %}
 
-{% macro file_actions(item, user, mail_ready) %}
+{% macro file_actions(item, user) %}
 <details class="file-menu" data-dropdown>
   <summary aria-label="Acciones de {{ item.filename }}">Acciones</summary>
 <div class="file-actions">
@@ -40,13 +40,13 @@
     <input type="hidden" name="csrf" value="{{ user.csrf }}">
     <input type="hidden" name="selection" value="{{ item.id }}">
     <input type="hidden" name="destination" value="submissions">
-    <button type="submit" class="file-action-button"{% if not mail_ready %} disabled title="Configura el correo saliente y el remitente para enviar avisos"{% endif %}>Enviar aviso</button>
+    <button type="submit" class="file-action-button">Enviar aviso</button>
   </form>
 </div>
 </details>
 {% endmacro %}
 
-{% macro submission_table(submissions, user, mail_ready, grouped=false, selection_form=none, archive=false) %}
+{% macro submission_table(submissions, user, grouped=false, selection_form=none, archive=false) %}
 {% if submissions %}
 <div class="table-wrap" tabindex="0" role="region" aria-label="{{ 'Archivos del grupo' if grouped else 'Archivos' }}">
 <table>
@@ -89,7 +89,7 @@
       </td>
       <td class="numeric">{{ (item.grade ~ ' / 50') if item.grade is not none else '—' }}</td>
       <td>
-        {% if archive %}{{ file_actions(item, user, mail_ready) }}
+        {% if archive %}{{ file_actions(item, user) }}
         {% else %}<a class="button secondary compact-button" href="/admin/submissions/{{ item.id }}?origen=informes" aria-label="Ver {{ item.filename }}">Ver</a>{% endif %}
       </td>
     </tr>

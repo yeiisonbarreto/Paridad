@@ -1,0 +1,58 @@
+{% extends "base.html" %}
+{% from "macros.html" import csrf, pagination %}
+{% block title %}Avisos · Paridad{% endblock %}
+{% block content %}
+<div class="page-heading">
+  <a href="/student">Volver a mis entregas</a>
+  <h1>Avisos</h1>
+</div>
+<section class="card notice-inbox" id="notice-inbox" aria-label="Bandeja de avisos">
+  {% if user.unread_notices %}
+  <form class="notice-inbox-tools" action="/student/avisos/leer" method="post">
+    {{ csrf(user) }}
+    <input type="hidden" name="page" value="{{ page }}">
+    <button type="submit" class="button secondary compact-button">Marcar todos como leídos</button>
+  </form>
+  {% endif %}
+  {% if notices %}
+  <ul class="notice-list">
+    {% for notice in notices %}
+    <li class="notice-entry{% if not notice.read_at %} notice-unread{% endif %}">
+      <div class="notice-heading">
+        <h2>{{ 'Revisa esta entrega' if notice.submission_id else 'Revisa tus entregas' }}</h2>
+        {% if not notice.read_at %}<span class="tag pending">Nuevo</span>{% endif %}
+      </div>
+      {% if notice.submission_id %}
+        <p class="table-detail">{{ notice.filename }} · {{ notice.activity }}</p>
+        {% if notice.similarity and notice.ai %}
+        <p>La similitud y el indicio de IA sin declarar superaron sus umbrales de revisión.</p>
+        {% elif notice.similarity %}
+        <p>La similitud superó el umbral de revisión.</p>
+        {% else %}
+        <p>El indicio de IA sin declarar superó el umbral de revisión.</p>
+        {% endif %}
+      {% else %}
+        <p>El equipo docente te invita a revisar el resultado de tus entregas.</p>
+      {% endif %}
+      <div class="notice-entry-tools">
+        <time class="table-detail">{{ notice.created_at|date_label }}</time>
+        {% if notice.submission_id %}<a href="/student/submissions/{{ notice.submission_id }}/nota">Ver entrega</a>
+        {% else %}<a href="/student">Ver mis entregas</a>{% endif %}
+        {% if not notice.read_at %}
+        <form action="/student/avisos/leer" method="post">
+          {{ csrf(user) }}
+          <input type="hidden" name="notice_id" value="{{ notice.id }}">
+          <input type="hidden" name="page" value="{{ page }}">
+          <button type="submit" class="button secondary compact-button">Marcar como leído</button>
+        </form>
+        {% endif %}
+      </div>
+    </li>
+    {% endfor %}
+  </ul>
+  {% else %}
+  <p class="empty">{{ 'Aún no tienes avisos.' if page == 1 else 'No hay avisos en esta página.' }}</p>
+  {% endif %}
+  {{ pagination('/student/avisos', page, has_next) }}
+</section>
+{% endblock %}

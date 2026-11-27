@@ -11,7 +11,7 @@ from starlette.middleware.trustedhost import TrustedHostMiddleware
 from starlette.responses import JSONResponse
 from starlette.staticfiles import StaticFiles
 
-from . import accounts, admin, grade_routes, invitations, reports, student
+from . import accounts, admin, grade_routes, invitations, notices, reports, student
 from .config import BASE_DIR, LOGIN_CSRF_COOKIE, PUBLIC_HOST, SESSION_COOKIE
 from .db import make_pool
 from .security import (
@@ -34,6 +34,7 @@ app.add_middleware(TrustedHostMiddleware, allowed_hosts=[PUBLIC_HOST], www_redir
 app.add_middleware(HTTPControls)
 app.mount("/static", StaticFiles(directory=BASE_DIR / "static"), name="static")
 app.include_router(student.router)
+app.include_router(notices.router)
 app.include_router(admin.router)
 app.include_router(reports.router)
 app.include_router(grade_routes.router)

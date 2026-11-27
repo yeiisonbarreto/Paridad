@@ -1,26 +1,17 @@
 """Single-use student invitations and password setup."""
 
-import os
 import re
 import secrets
-from email.message import EmailMessage
 from typing import Annotated
 
 from fastapi import APIRouter, Form, HTTPException, Query, Request
 
-from .config import PUBLIC_ORIGIN, SECURE_COOKIES
-from .mailer import send_email, smtp_configured
-from .security import PASSWORDS, check_rate, normalized_email, source_ip, token_digest, valid_password
+from .security import PASSWORDS, check_rate, source_ip, token_digest, valid_password
 from .web import redirect, view
 
 router = APIRouter()
 TOKEN_PATTERN = re.compile(r"[A-Za-z0-9_-]{43}")
 INVALID_INVITATION = "Invitación vencida, revocada o ya utilizada. Solicita otra al administrador."
-
-
-def mail_enabled() -> bool:
-    return bool(SECURE_COOKIES and smtp_configured()
-                and os.getenv("PARIDAD_SMTP_FROM", "").strip())
 
 
 def create_invitation(conn, student_id: int) -> str:
@@ -33,19 +24,6 @@ def create_invitation(conn, student_id: int) -> str:
         (student_id, token_digest(token)),
     )
     return token
-
-
-def send_invitation_email(address: str, username: str, token: str) -> None:
-    message = EmailMessage()
-    message["From"] = normalized_email(os.environ["PARIDAD_SMTP_FROM"])
-    message["To"] = address
-    message["Subject"] = "Crea tu contraseña de Paridad"
-    message.set_content(
-        f"Tu usuario en Paridad es {username}.\n\n"
-        f"Elige tu contraseña en {PUBLIC_ORIGIN}/invitacion?token={token}\n\n"
-        "La invitación dura 24 horas y se puede usar una vez.\n"
-    )
-    send_email(message)
 
 
 def find_invitation(conn, token_hash: bytes):

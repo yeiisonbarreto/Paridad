@@ -12,7 +12,7 @@ from psycopg_pool import PoolTimeout
 from .analysis import ANALYSIS_VERSION, Prepared, analyze_style, compare, tokenize
 from .db import make_pool
 from .grading import static_rubric
-from .notices import enqueue_automatic, notices_enabled, send_next
+from .notices import publish_automatic
 
 LOGGER = logging.getLogger("paridad.worker")
 
@@ -153,15 +153,11 @@ def run() -> None:
                     processed = process_next(conn)
                 with pool.connection() as conn:
                     graded = backfill_grade(conn)
-                sent = False
-                if notices_enabled():
-                    if monotonic() >= next_notice_scan:
-                        with pool.connection() as conn:
-                            enqueue_automatic(conn)
-                        next_notice_scan = monotonic() + 10
+                if monotonic() >= next_notice_scan:
                     with pool.connection() as conn:
-                        sent = send_next(conn)
-                if not processed and not graded and not sent:
+                        publish_automatic(conn)
+                    next_notice_scan = monotonic() + 10
+                if not processed and not graded:
                     stop.wait(1)
             except (OperationalError, PoolTimeout) as exc:
                 LOGGER.warning("PostgreSQL no disponible clase=%s", type(exc).__name__)

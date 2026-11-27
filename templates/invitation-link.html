@@ -1,0 +1,14 @@
+{% extends "base.html" %}
+{% block title %}Invitación · Paridad{% endblock %}
+{% block content %}
+<section class="card narrow">
+  <h1>Enlace de invitación</h1>
+  <p>{{ student.display_name }} · {{ student.username }}</p>
+  <p class="muted">Este enlace personal permite elegir una contraseña. Puede usarse una vez y caduca en 24 horas.</p>
+  <div class="field">
+    <label for="invitation-link">Enlace</label>
+    <input id="invitation-link" type="url" value="{{ invitation }}" readonly>
+  </div>
+  <p><a class="button secondary" href="/admin/accounts">Volver a cuentas</a></p>
+</section>
+{% endblock %}

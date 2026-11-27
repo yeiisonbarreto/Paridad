@@ -22,55 +22,15 @@ curl --fail https://paridad.universidad.edu/healthz
 
 El perfil TLS publica HTTPS. Coordina la emisión y renovación de certificados con el servicio institucional. Tras renovar archivos dentro del directorio montado, recarga Nginx. Conserva `.env` con permisos restrictivos. El servicio de migraciones usa el propietario de PostgreSQL y prepara un rol de operación sin permisos para alterar el esquema ni administrar roles. La aplicación y el trabajador reciben únicamente la credencial del rol de operación.
 
-## Avisos de revisión e invitaciones por correo
+## Avisos y acceso de los estudiantes
 
-### Envío directo desde el servidor de Paridad
+**Avisos** muestra al estudiante sus mensajes y el contador de pendientes de lectura. Paridad publica un aviso cuando una entrega supera el umbral de similitud o de indicio de IA sin declarar. El trabajador revisa también las entregas anteriores y registra cada tipo de alerta una vez por archivo. Los avisos propios se actualizan aproximadamente cada diez segundos con la página abierta.
 
-El archivo `compose.correo.yml` agrega Postfix para los avisos manuales y automáticos. El trabajador de Paridad entrega cada aviso a Postfix por una red privada de Docker. Postfix firma con DKIM, consulta los registros MX de cada destinatario y entrega el mensaje por SMTP con STARTTLS. La cola y las claves se guardan en volúmenes de Docker. El servicio carece de un puerto publicado y de buzones. Para este modo se prescinde de las credenciales de un proveedor SMTP.
+En **Informes**, selecciona entregas y pulsa **Enviar aviso** para publicar un mensaje por estudiante. El menú **Acciones** de Archivos permite hacerlo para uno solo. Paridad omite las cuentas inactivas y evita publicar avisos manuales repetidos al mismo estudiante en un minuto. La migración conserva los avisos anteriores en la bandeja, inicialmente como pendientes de lectura.
 
-En el `.env` del servidor universitario usa un dominio o subdominio que la universidad controle. El remitente y `PARIDAD_MAIL_DOMAIN` deben tener el mismo dominio. Conserva la configuración HTTPS de la instalación.
+En **Cuentas**, abre una cuenta activa y usa **Generar enlace de invitación** para obtener un enlace personal que caduca en 24 horas. Generar otro enlace invalida el anterior. Usarlo, cambiar el correo, restablecer la contraseña o inhabilitar la cuenta también lo invalida.
 
-```dotenv
-PARIDAD_NOTICE_FROM=notificaciones@avisos.tu-universidad.edu
-PARIDAD_MAIL_DOMAIN=avisos.tu-universidad.edu
-PARIDAD_MAIL_HOSTNAME=correo.avisos.tu-universidad.edu
-PUBLIC_URL=https://paridad.tu-universidad.edu
-```
-
-1. Confirma que la IP pública del servidor sea estable y que la red universitaria permita **TCP 25 saliente** hacia los servidores de los destinatarios. Pide al responsable del DNS que publique el registro `A` del nombre de salida y que su registro inverso `PTR` coincida. En el subdominio remitente, publica un registro A que apunte a esa IP, un registro SPF que la autorice y un registro DMARC. Trabaja sobre un subdominio dedicado si el dominio institucional ya tiene un servicio de correo.
-2. Arranca primero el servicio de correo para generar su clave DKIM y consulta el registro público que imprime en los logs.
-
-   ```sh
-   docker compose --env-file .env -f docker-compose.yml -f compose.tls.yml -f compose.correo.yml up -d mail-out
-   docker compose --env-file .env -f docker-compose.yml -f compose.tls.yml -f compose.correo.yml logs mail-out
-   ```
-
-3. Publica el registro TXT DKIM del selector `paridad` en `paridad._domainkey.<dominio-remitente>`. Tras comprobar el DNS, arranca todos los servicios.
-
-   ```sh
-   docker compose --env-file .env -f docker-compose.yml -f compose.tls.yml -f compose.correo.yml up -d --build --wait
-   ```
-
-Al aceptar un aviso, Postfix lo coloca en su cola. Puedes verificar el resultado final de entrega en los logs de `mail-out`. Conserva los volúmenes `mail_queue` y `mail_dkim`. Si la subred privada `172.30.62.0/28` está ocupada, ajusta `PARIDAD_MAIL_SUBNET` a un rango privado libre.
-
-### Envío mediante un relay SMTP
-
-Configura un servidor SMTP con STARTTLS accesible desde la aplicación y el trabajador. Usa direcciones institucionales que el servidor autorice como remitentes. Configura una URL HTTPS pública para que el aviso incluya el enlace a las entregas del estudiante. Para servidores con autenticación, establece el usuario y la contraseña en el `.env` de la instalación.
-
-```dotenv
-PARIDAD_SMTP_HOST=smtp.tu-universidad.edu
-PARIDAD_SMTP_PORT=587
-PARIDAD_NOTICE_FROM=notificaciones@tu-dominio.edu
-PARIDAD_SMTP_FROM=notificaciones@tu-universidad.edu
-PARIDAD_SMTP_USERNAME=
-PARIDAD_SMTP_PASSWORD=
-```
-
-Recrea los servicios después de guardar el archivo. `PARIDAD_NOTICE_FROM` activa los avisos de revisión junto con `PARIDAD_SMTP_HOST`. En ambos modos, el trabajador envía un correo a la dirección registrada en la cuenta cuando una entrega supera el umbral de similitud o de indicio de IA sin declarar. También revisa los umbrales de entregas ya analizadas, incluidas las anteriores al arranque. Cada tipo de alerta se pone en cola una sola vez por archivo. **Enviar aviso** en Informes permite enviar correos manualmente, uno por destinatario aunque tenga varios archivos seleccionados. El trabajador reintenta errores de SMTP y registra los avisos fallidos.
-
-Puedes usar una dirección exclusiva de salida como `notificaciones@tu-dominio.edu`. Verifica que el dominio sea tuyo o que tengas permiso para usarlo y autoriza la dirección en el proveedor SMTP. El proveedor se encarga de la entrega y la política de correo entrante. Para excluir respuestas, configura el rechazo de correo entrante para esa dirección. Los avisos llevan un pie que indica que son automáticos, una versión de texto y el logotipo de Paridad incrustado si la imagen está disponible en `static/paridad-logo.png`. Docker puede incorporar el PNG original desde la carpeta del proyecto durante la compilación.
-
-`PARIDAD_SMTP_FROM` se usa para las invitaciones de contraseña. En **Cuentas**, guarda un correo válido para el estudiante y comprueba que su cuenta esté activa. Solo se envía un mensaje cuando el administrador pulsa **Enviar invitación por correo**. Los enlaces usan `PUBLIC_URL`, caducan en 24 horas y se invalidan al usar, reenviar, cambiar el correo, restablecer la contraseña desde administración o inhabilitar la cuenta.
+Al actualizar una instalación existente, añade `--remove-orphans` al comando de arranque de Compose para retirar los servicios obsoletos del proyecto y conserva su `.env` y sus datos de PostgreSQL.
 
 ## Moodle con sesión local
 

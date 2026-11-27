@@ -1,42 +1,19 @@
-"""Queue academic review notices and deliver them through the selected transport."""
+"""Publish review notices and serve a private inbox for each student."""
 
-import logging
-import os
-from email.message import EmailMessage
+from typing import Annotated
+from uuid import UUID
 
-from .config import BASE_DIR, PUBLIC_ORIGIN, SECURE_COOKIES
-from .mailer import send_email, smtp_configured
-from .security import normalized_email
-from .web import templates
+from fastapi import APIRouter, Form, HTTPException, Request
 
-LOGGER = logging.getLogger("paridad.notices")
-NOTICE_LOGO = BASE_DIR / "static" / "paridad-logo.png"
+from .admin import Csrf, PAGE_SIZE, Page
+from .security import auth_user, check_csrf
+from .web import redirect, view
 
-
-def direct_notice_delivery() -> bool:
-    return os.getenv("PARIDAD_NOTICE_DELIVERY") == "direct"
+router = APIRouter(prefix="/student/avisos")
+InboxPage = Annotated[int, Form(ge=1, le=10000)]
 
 
-def notice_sender() -> str:
-    sender = normalized_email(os.getenv("PARIDAD_NOTICE_FROM", ""))
-    if direct_notice_delivery():
-        domain = os.getenv("PARIDAD_MAIL_DOMAIN", "").strip().lower()
-        if sender.rsplit("@", 1)[1] != domain:
-            raise ValueError("El remitente de avisos debe pertenecer al dominio de correo saliente.")
-    return sender
-
-
-def notices_enabled() -> bool:
-    if not direct_notice_delivery() and not smtp_configured():
-        return False
-    try:
-        notice_sender()
-    except ValueError:
-        return False
-    return True
-
-
-def enqueue_automatic(conn) -> None:
+def publish_automatic(conn) -> None:
     conn.execute(
         """WITH eligible AS (
                SELECT s.id, s.student_id,
@@ -46,110 +23,69 @@ def enqueue_automatic(conn) -> None:
                        100 * COALESCE(a.ai_threshold, cfg.ai_threshold) AS ai
                FROM submissions s JOIN activities a ON a.id = s.activity_id
                JOIN users u ON u.id = s.student_id CROSS JOIN settings cfg
-               WHERE s.state = 'completed' AND u.active AND u.email IS NOT NULL
+               WHERE s.state = 'completed' AND u.active
                  AND ((NOT s.noticed_similarity AND s.max_similarity_bp >
                        100 * COALESCE(a.similarity_threshold, cfg.similarity_threshold))
                    OR (NOT s.noticed_ai AND s.ai_credit IS NULL AND s.ai_bp >
                        100 * COALESCE(a.ai_threshold, cfg.ai_threshold)))
                ORDER BY s.created_at, s.id LIMIT 200 FOR NO KEY UPDATE OF s SKIP LOCKED
-           ), queued AS (
+           ), published AS (
                INSERT INTO review_notices (student_id, submission_id, similarity, ai)
                SELECT student_id, id, similarity, ai FROM eligible
                RETURNING submission_id, similarity, ai
            )
            UPDATE submissions s SET noticed_similarity = s.noticed_similarity OR q.similarity,
-               noticed_ai = s.noticed_ai OR q.ai FROM queued q WHERE s.id = q.submission_id"""
+               noticed_ai = s.noticed_ai OR q.ai FROM published q WHERE s.id = q.submission_id"""
     )
 
 
-def enqueue_manual(conn, student_ids):
+def publish_manual(conn, student_ids: list[int]) -> int:
     # Serialize overlapping clicks across administrators while applying the cooldown.
     conn.execute("SELECT pg_advisory_xact_lock(602541918)")
-    rows = conn.execute(
+    return conn.execute(
         """INSERT INTO review_notices (student_id)
            SELECT u.id FROM users u WHERE u.id = ANY(%s) AND u.role = 'STUDENT'
-             AND u.active AND u.email IS NOT NULL AND NOT EXISTS (
+             AND u.active AND NOT EXISTS (
                  SELECT 1 FROM review_notices n WHERE n.student_id = u.id AND n.submission_id IS NULL
-                   AND (n.status = 'queued' OR (n.status = 'sent'
-                        AND n.created_at > now() - interval '1 minute'))
-             )
-           RETURNING id""",
+                   AND n.created_at > now() - interval '1 minute'
+             )""",
         (student_ids,),
-    ).fetchall()
-    return len(rows)
+    ).rowcount
 
 
-def notice_message(job):
-    message = EmailMessage()
-    sender = notice_sender()
-    message["From"] = f"Paridad <{sender}>"
-    domain = sender.rsplit("@", 1)[1]
-    message["To"] = job["email"]
-    message["Message-ID"] = f"<paridad-{job['id']}@{domain}>"
-    message["Subject"] = "Revisa tu trabajo en Paridad"
-    message["Auto-Submitted"] = "auto-generated"
-    message["X-Auto-Response-Suppress"] = "All"
-    if job["submission_id"]:
-        reasons = []
-        if job["similarity"]:
-            reasons.append("la similitud de código")
-        if job["ai"]:
-            reasons.append("el indicio de IA sin declarar")
-        verb = "superaron" if len(reasons) > 1 else "superó"
-        detail = (
-            f"Te invitamos a revisar «{job['filename']}» de la actividad {job['code']}. "
-            f"Paridad detectó que {' y '.join(reasons)} {verb} el umbral de revisión. "
-            "El equipo docente puede revisar el contexto de tu entrega.\n"
-        )
-    else:
-        detail = "Te invitamos a revisar el resultado de tus entregas y tu trabajo en Paridad.\n"
-    url = f"{PUBLIC_ORIGIN}/student" if SECURE_COOKIES else None
-    link = f"Consulta tus entregas en {url}" if url else "Ingresa a Paridad para ver el resultado."
-    footer = "Este correo se generó automáticamente desde Paridad. No se admiten respuestas a esta dirección."
-    message.set_content(
-        f"Hola, {job['display_name']}:\n\n{detail}\n{link}\n\n"
-        f"Cordialmente,\nParidad\n\n{footer}\n"
-    )
-
-    try:
-        logo = NOTICE_LOGO.read_bytes()
-    except FileNotFoundError:
-        logo = None
-    logo_id = f"paridad-logo-{job['id']}@{domain}" if logo else None
-    html = templates.get_template("notice-email.html").render(
-        name=job["display_name"], detail=detail.strip(), url=url, footer=footer, logo_id=logo_id,
-    )
-    message.add_alternative(html, subtype="html")
-    if logo:
-        message.get_payload()[-1].add_related(
-            logo, maintype="image", subtype="png", cid=f"<{logo_id}>", disposition="inline",
-        )
-    return message
+@router.get("")
+def inbox(request: Request, page: Page = 1):
+    with request.app.state.pool.connection() as conn:
+        user = auth_user(conn, request, "STUDENT")
+        notices = conn.execute(
+            """SELECT n.id, n.submission_id, n.similarity, n.ai, n.created_at, n.read_at,
+                      s.filename, a.code AS activity
+               FROM review_notices n LEFT JOIN submissions s ON s.id = n.submission_id
+               LEFT JOIN activities a ON a.id = s.activity_id
+               WHERE n.student_id = %s ORDER BY n.created_at DESC, n.id DESC LIMIT %s OFFSET %s""",
+            (user["id"], PAGE_SIZE + 1, (page - 1) * PAGE_SIZE),
+        ).fetchall()
+    return view(request, "student-notices.html", user=user, notices=notices[:PAGE_SIZE],
+                page=page, has_next=len(notices) > PAGE_SIZE)
 
 
-def send_next(conn):
-    job = conn.execute(
-        """SELECT n.*, u.email, u.active, u.display_name, s.filename, a.code
-           FROM review_notices n JOIN users u ON u.id = n.student_id
-           LEFT JOIN submissions s ON s.id = n.submission_id LEFT JOIN activities a ON a.id = s.activity_id
-           WHERE n.status = 'queued' AND n.available_at <= now()
-           ORDER BY n.available_at, n.created_at, n.id LIMIT 1 FOR UPDATE OF n SKIP LOCKED"""
-    ).fetchone()
-    if not job:
-        return False
-    if not job["active"] or not job["email"]:
-        conn.execute("UPDATE review_notices SET status = 'skipped' WHERE id = %s", (job["id"],))
-        return True
-    try:
-        send_email(notice_message(job), direct=direct_notice_delivery())
-    except (OSError, ValueError) as exc:
-        attempts = job["attempts"] + 1
-        LOGGER.warning("Aviso SMTP id=%s intento=%s clase=%s", job["id"], attempts, type(exc).__name__)
-        conn.execute(
-            """UPDATE review_notices SET attempts = %s, status = %s,
-                      available_at = now() + make_interval(mins => %s) WHERE id = %s""",
-            (attempts, "failed" if attempts >= 4 else "queued", 2 ** attempts, job["id"]),
-        )
-    else:
-        conn.execute("UPDATE review_notices SET status = 'sent' WHERE id = %s", (job["id"],))
-    return True
+@router.post("/leer")
+def read_notices(request: Request, csrf: Csrf, notice_id: Annotated[UUID | None, Form()] = None,
+                 page: InboxPage = 1):
+    with request.app.state.pool.connection() as conn:
+        user = auth_user(conn, request, "STUDENT")
+        check_csrf(user["csrf"], csrf)
+        if notice_id is None:
+            conn.execute(
+                "UPDATE review_notices SET read_at = now() WHERE student_id = %s AND read_at IS NULL",
+                (user["id"],),
+            )
+        else:
+            updated = conn.execute(
+                """UPDATE review_notices SET read_at = COALESCE(read_at, now())
+                   WHERE id = %s AND student_id = %s RETURNING id""",
+                (notice_id, user["id"]),
+            ).fetchone()
+            if not updated:
+                raise HTTPException(404, "Aviso no encontrado.")
+    return redirect(f"/student/avisos?page={page}")

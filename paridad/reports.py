@@ -12,7 +12,7 @@ from .admin import ContextQuery, Csrf, PAGE_SIZE, Page, administrator
 from .bulk import consume_deletion, deletion_preview
 from .file_archives import submission_bytes, submission_zip
 from .grade_routes import get_grade
-from .notices import enqueue_manual, notices_enabled
+from .notices import publish_manual
 from .report_excel import MAX_SHEET_ROWS, XLSX_MEDIA_TYPE, Percentage, report_excel
 from .similarity_groups import similarity_groups
 from .submission_records import delete_submissions, lock_submission_scopes
@@ -151,7 +151,6 @@ def reports(
         request, "reports.html", user=user, **filters, alerts_only=alerts_only, groups=groups,
         pairs=pairs[:PAGE_SIZE], submissions=submissions[:PAGE_SIZE], page=page,
         has_next=groups_next or len(pairs) > PAGE_SIZE or len(submissions) > PAGE_SIZE,
-        mail_ready=notices_enabled(),
     )
 
 
@@ -257,7 +256,7 @@ def submissions_list(request: Request, activity_id: ContextQuery = "", language_
         submissions = submission_page(conn, context_params(filters), page)
     return view(
         request, "submissions.html", user=user, **filters, submissions=submissions[:PAGE_SIZE],
-        page=page, has_next=len(submissions) > PAGE_SIZE, mail_ready=notices_enabled(),
+        page=page, has_next=len(submissions) > PAGE_SIZE,
     )
 
 
@@ -271,8 +270,6 @@ def send_review_notices(
 ):
     with request.app.state.pool.connection() as conn:
         user = administrator(conn, request, csrf)
-        if not notices_enabled():
-            raise HTTPException(409, "Configura el correo saliente y el remitente para enviar avisos.")
         activity, language = optional_context_id(activity_id), optional_context_id(language_id)
         ids = None if all_results else sorted(set(selection))
         rows = conn.execute(
@@ -286,8 +283,8 @@ def send_review_notices(
         if ids is not None and len(rows) != len(ids):
             raise HTTPException(409, "La selección cambió. Vuelve a seleccionar los archivos.")
         students = sorted({row["student_id"] for row in rows})
-        queued = enqueue_manual(conn, students)
-    return view(request, "notices-result.html", user=user, queued=queued, skipped=len(students) - queued,
+        published = publish_manual(conn, students)
+    return view(request, "notices-result.html", user=user, published=published, skipped=len(students) - published,
                 destination="/admin/" + destination)
 
 

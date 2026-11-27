@@ -79,7 +79,11 @@ def auth_user(conn, request: Request, role: str | None = None) -> dict | None:
     user = None
     if token:
         user = conn.execute(
-            """SELECT u.id, u.username, u.display_name, u.role, s.csrf
+            """SELECT u.id, u.username, u.display_name, u.role, s.csrf,
+                      CASE WHEN u.role = 'STUDENT' THEN (
+                          SELECT count(*) FROM review_notices n
+                          WHERE n.student_id = u.id AND n.read_at IS NULL
+                      ) ELSE 0 END AS unread_notices
                FROM sessions s JOIN users u ON u.id = s.user_id
                WHERE s.token_hash = %s AND s.expires_at > now() AND u.active FOR SHARE OF u""",
             (token_digest(token),),

@@ -87,6 +87,16 @@ def wait_result(client, filename, minimum_bp=0):
     raise AssertionError(f"Resultado pendiente para {filename}, mínimo {minimum_bp}")
 
 
+def wait_notice(client, label):
+    deadline = time.monotonic() + 25
+    while time.monotonic() < deadline:
+        page = assert_status(client.get("/student/avisos")).text
+        if label in page:
+            return page
+        time.sleep(0.4)
+    raise AssertionError(f"No apareció el aviso esperado: {label}")
+
+
 def main():
     username = os.getenv("PARIDAD_TEST_ADMIN", "docente")
     password = os.getenv("PARIDAD_TEST_PASSWORD") or getpass.getpass("Contraseña de la cuenta de prueba: ")
@@ -163,6 +173,8 @@ def main():
         row = wait_result(first, "primero.c")
         assert row["similarity_bp"] == 0 and not row["similarity_alert"]
         assert row["ai_bp"] > 3000 and row["ai_alert"]
+        assert "indicio de IA" in wait_notice(first, "primero.c")
+        assert_status(admin.get("/student/avisos"), 403)
         upload(first, first_csrf, activity_id, c_id, "primero.c", STYLE_CODE, request_id=nonce)
         upload(first, first_csrf, activity_id, c_id, "mismo-estudiante.c", STYLE_CODE)
         assert wait_result(first, "mismo-estudiante.c")["similarity_bp"] == 0
@@ -231,6 +243,32 @@ def main():
             workbook.close()
 
         graded = wait_result(first, "primero.c", 10000)
+        inbox_first = wait_notice(first, "La similitud")
+        inbox_second = wait_notice(second, "compania.c")
+        assert "compania.c" not in inbox_first and "primero.c" not in inbox_second
+        assert second_name not in inbox_first and first_name not in inbox_second
+        notice_id = re.search(r'name="notice_id" value="([^"]+)"', inbox_first)[1]
+        read_path = "/student/avisos/leer"
+        post(second, read_path, second_csrf, 404, notice_id=notice_id)
+        post(first, read_path, "token-inválido", 403, notice_id=notice_id)
+        post(first, read_path, first_csrf, notice_id=notice_id)
+        assert notice_id not in assert_status(first.get("/student/avisos")).text
+
+        selection = [graded["id"], second_row["id"],
+                     wait_result(first, "mismo-estudiante.c")["id"]]
+        post(first, "/admin/avisos", first_csrf, 403, selection=selection)
+        sent = post(admin, "/admin/avisos", admin_csrf, 200, selection=selection,
+                    activity_id=activity_id, language_id=c_id)
+        assert "2 avisos publicados" in sent.text
+        repeated = post(admin, "/admin/avisos", admin_csrf, 200, selection=selection)
+        assert "0 avisos publicados" in repeated.text
+        assert "Revisa tus entregas" in assert_status(first.get("/student/avisos")).text
+        assert "Revisa tus entregas" in assert_status(second.get("/student/avisos")).text
+        post(first, read_path, first_csrf)
+        read_inbox = assert_status(first.get("/student/avisos")).text
+        assert 'class="notice-count"' not in read_inbox and "Revisa tus entregas" in read_inbox
+        assert 'class="notice-count"' in assert_status(second.get("/student")).text
+
         selected = post(admin, "/admin/reports/exportar", admin_csrf, 200, selection=graded["id"], **filters)
         workbook = load_workbook(BytesIO(selected.content))
         try:
@@ -338,6 +376,16 @@ def main():
                       r'<form action="/admin/accounts/(\d+)"', account_page)[1]
             for name in (first_name, third_name)
         ]
+        invitation = post(admin, f"/admin/accounts/{ids[1]}/invitacion", admin_csrf, 200)
+        token = re.search(r'/invitacion\?token=([A-Za-z0-9_-]+)', invitation.text)[1]
+        assert_status(guest.get("/invitacion", params={"token": token}))
+        new_password = secrets.token_urlsafe(18)
+        assert_status(guest.post("/invitacion", data={
+            "token": token, "password": new_password, "confirmation": new_password,
+        }), 303)
+        assert_status(guest.get("/invitacion", params={"token": token}), 400)
+        assert login(guest, third_name, new_password) == "/student"
+
         bulk_accounts = "/admin/accounts/lote"
         post(first, bulk_accounts, first_csrf, 403, action="disable", selection=ids)
         post(admin, bulk_accounts, admin_csrf, action="disable", selection=ids)
@@ -353,7 +401,7 @@ def main():
         for student_id in ids:
             assert_status(admin.get(f"/admin/accounts/{student_id}/eliminar"), 404)
 
-    print("Flujo HTTP verificado: autorización, recálculo, ámbitos, fragmentos, crédito, límites, sesiones, manejo de cuentas, exportación, operaciones en lote, notas y aclaraciones.")
+    print("Flujo HTTP verificado: autorización, recálculo, ámbitos, fragmentos, crédito, límites, sesiones, manejo de cuentas, exportación, operaciones en lote, notas, aclaraciones y avisos internos.")
 
 
 if __name__ == "__main__":

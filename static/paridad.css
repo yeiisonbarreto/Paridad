@@ -384,8 +384,6 @@ code { font: 0.85rem/1.55 ui-monospace, "Cascadia Code", monospace; }
 .file-menu .file-actions a:hover, .file-action-button:hover { background: var(--panel); }
 
 .bulk-actions { border: 0; margin: 0; padding: 0; }
-.bulk-actions[disabled], .file-action-button:disabled { opacity: 0.54; cursor: default; }
-.file-action-button:disabled:hover { background: transparent; }
 
 .compact-button { min-height: 2rem; padding: 0.24rem 0.55rem; font-size: 0.84rem; }
 .report-links { gap: 0.9rem; }
@@ -414,3 +412,25 @@ code { font: 0.85rem/1.55 ui-monospace, "Cascadia Code", monospace; }
 @media (max-width: 64rem) {
   .report-toolbar { top: 6.75rem; }
 }
+
+.student-nav { margin-inline-start: auto; }
+.student-nav + .account-menu { margin-inline-start: 0; }
+.student-notice-link {
+  display: inline-flex; align-items: center; gap: 0.35rem; padding: 0.35rem 0.55rem;
+  text-decoration: none; color: var(--ink); border-radius: 0.45rem; font-size: 0.9rem;
+}
+.student-notice-link:hover, .student-notice-link[aria-current="page"] { background: var(--brand-soft); color: var(--brand-dark); }
+.notice-count {
+  padding: 0.07rem 0.42rem; border-radius: 2rem; background: var(--brand); color: white;
+  font-size: 0.75rem; font-variant-numeric: tabular-nums;
+}
+.notice-inbox { max-width: 52rem; }
+.notice-inbox-tools { display: flex; justify-content: flex-end; margin-bottom: 0.65rem; }
+.notice-list { list-style: none; margin: 0; padding: 0; display: grid; gap: 0.65rem; }
+.notice-entry {
+  padding: 0.8rem 0.85rem; border: 1px solid var(--line); border-radius: 0.55rem;
+}
+.notice-unread { background: var(--panel); border-inline-start: 3px solid var(--brand); }
+.notice-heading, .notice-entry-tools { display: flex; flex-wrap: wrap; align-items: center; gap: 0.55rem; }
+.notice-heading h2 { margin: 0; font-size: 1.06rem; }
+.notice-entry-tools { gap: 0.6rem 0.95rem; font-size: 0.87rem; }
