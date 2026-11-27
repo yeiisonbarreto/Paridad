@@ -9,10 +9,11 @@ from psycopg import OperationalError
 from psycopg.types.json import Jsonb
 from psycopg_pool import PoolTimeout
 
-from .analysis import ANALYSIS_VERSION, Prepared, analyze_style, compare, tokenize
+from .analysis import ANALYSIS_VERSION, SIMILARITY_VERSION, Prepared, analyze_style, compare, tokenize
 from .db import make_pool
 from .grading import static_rubric
 from .notices import publish_automatic
+from .submission_records import recompute_similarity
 
 LOGGER = logging.getLogger("paridad.worker")
 
@@ -24,7 +25,7 @@ def process_submission(conn, job: dict) -> None:
     prepared = Prepared.from_analysis(normalized)
     ai_bp, features = analyze_style(lexed)
     rubric = static_rubric(job["source"], job["profile"], lexed)
-    quality = rubric["structure"] + rubric["practices"] + rubric["english_comments"]
+    quality = rubric["structure"] + rubric["practices"] + rubric["comments"]
     max_bp = 0
 
     conn.execute(
@@ -56,7 +57,7 @@ def process_submission(conn, job: dict) -> None:
             max_bp = max(max_bp, score)
             pairs.append((
                 *scope, left["id"], left["student_id"], right["id"], right["student_id"],
-                score, Jsonb(metrics), Jsonb(fragments), ANALYSIS_VERSION,
+                score, Jsonb(metrics), Jsonb(fragments), SIMILARITY_VERSION,
             ))
             if score > peer["max_similarity_bp"]:
                 peers.append((score, peer["id"]))
@@ -112,6 +113,47 @@ def process_next(conn) -> bool:
     return True
 
 
+def refresh_legacy_similarity(conn) -> bool:
+    """Update one small batch without hiding a cohort's current results."""
+    scope = conn.execute(
+        """SELECT al.activity_id, al.language_id FROM activity_languages al
+           WHERE EXISTS (
+               SELECT 1 FROM similarity_pairs p
+               WHERE p.activity_id = al.activity_id AND p.language_id = al.language_id
+                 AND p.analysis_version = 'lexical-1'
+           )
+           ORDER BY al.activity_id, al.language_id LIMIT 1 FOR NO KEY UPDATE OF al SKIP LOCKED"""
+    ).fetchone()
+    if not scope:
+        return False
+    pairs = conn.execute(
+        """SELECT left_id, right_id FROM similarity_pairs
+           WHERE activity_id = %s AND language_id = %s AND analysis_version = 'lexical-1'
+           ORDER BY left_id, right_id LIMIT 16""",
+        (scope["activity_id"], scope["language_id"]),
+    ).fetchall()
+    ids = sorted({value for pair in pairs for value in (pair["left_id"], pair["right_id"])})
+    if not ids:
+        return False
+    prepared = {
+        row["id"]: Prepared.from_analysis(row["analysis"])
+        for row in conn.execute("SELECT id, analysis FROM submissions WHERE id = ANY(%s)", (ids,))
+    }
+    updates = []
+    for pair in pairs:
+        left_id, right_id = pair["left_id"], pair["right_id"]
+        score, metrics, fragments = compare(prepared[left_id], prepared[right_id])
+        updates.append((score, Jsonb(metrics), Jsonb(fragments), SIMILARITY_VERSION, left_id, right_id))
+    with conn.cursor() as cursor:
+        cursor.executemany(
+            """UPDATE similarity_pairs SET score_bp = %s, metrics = %s, fragments = %s,
+                      analysis_version = %s, computed_at = now() WHERE left_id = %s AND right_id = %s""",
+            updates,
+        )
+    recompute_similarity(conn, ids)
+    return True
+
+
 def backfill_grade(conn) -> bool:
     row = conn.execute(
         """SELECT s.id, s.source, l.profile, l.options FROM submissions s
@@ -124,7 +166,7 @@ def backfill_grade(conn) -> bool:
     try:
         lexed = tokenize(row["source"], row["profile"], row["options"])
         rubric = static_rubric(row["source"], row["profile"], lexed)
-        quality = rubric["structure"] + rubric["practices"] + rubric["english_comments"]
+        quality = rubric["structure"] + rubric["practices"] + rubric["comments"]
     except ValueError:
         rubric, quality = {"unavailable": True}, None
     conn.execute("UPDATE submissions SET rubric = %s, quality_points = %s WHERE id = %s",
@@ -139,6 +181,7 @@ def run() -> None:
         signal.signal(sig, lambda *_: stop.set())
     next_cleanup = 0.0
     next_notice_scan = 0.0
+    next_similarity_refresh = 0.0
     with make_pool() as pool:
         while not stop.is_set():
             try:
@@ -153,11 +196,21 @@ def run() -> None:
                     processed = process_next(conn)
                 with pool.connection() as conn:
                     graded = backfill_grade(conn)
+                refreshed = False
+                if monotonic() >= next_similarity_refresh:
+                    try:
+                        with pool.connection() as conn:
+                            refreshed = refresh_legacy_similarity(conn)
+                    except (OperationalError, PoolTimeout):
+                        raise
+                    except Exception as exc:
+                        LOGGER.error("Error al actualizar similitudes anteriores clase=%s", type(exc).__name__)
+                        next_similarity_refresh = monotonic() + 30
                 if monotonic() >= next_notice_scan:
                     with pool.connection() as conn:
                         publish_automatic(conn)
                     next_notice_scan = monotonic() + 10
-                if not processed and not graded:
+                if not processed and not graded and not refreshed:
                     stop.wait(1)
             except (OperationalError, PoolTimeout) as exc:
                 LOGGER.warning("PostgreSQL no disponible clase=%s", type(exc).__name__)

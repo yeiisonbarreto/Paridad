@@ -34,7 +34,7 @@ def main() -> None:
     commands.add_parser("migrate")
     admin = commands.add_parser("create-admin")
     admin.add_argument("username")
-    admin.add_argument("--name", default="Administración")
+    admin.add_argument("--name", default="Administrador")
     args = parser.parse_args()
     if args.command == "migrate":
         migrate()

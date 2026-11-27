@@ -29,7 +29,7 @@
     <li>
       <h3>Solicitud recibida</h3>
       <time class="table-detail" datetime="{{ notice.created_at.isoformat() }}">{{ notice.created_at|date_label }}</time>
-      <p>El equipo docente recibió su solicitud de aclaración para esta entrega.
+      <p>Paridad recibió su solicitud de aclaración para esta entrega.
         {% if not notice.resolved_at %}Revisará el motivo presentado y comunicará la decisión en este mismo hilo.{% endif %}</p>
       <dl class="notice-thread-fields">
         <div><dt>Nota al solicitar la aclaración</dt><dd>{{ notice.grade_at_request }} / 50</dd></div>
@@ -39,11 +39,11 @@
     </li>
     {% if notice.resolved_at %}
     <li>
-      <h3>{{ 'Resolución docente' if notice.clarification_status == 'resolved' else 'Solicitud rechazada' }}</h3>
+      <h3>{{ 'Resolución de Paridad' if notice.clarification_status == 'resolved' else 'Solicitud rechazada por Paridad' }}</h3>
       <time class="table-detail" datetime="{{ notice.resolved_at.isoformat() }}">{{ notice.resolved_at|date_label }}</time>
-      <p>El equipo docente concluyó la revisión de su solicitud.</p>
+      <p>Paridad concluyó la revisión de su solicitud.</p>
       <dl class="notice-thread-fields">
-        <div><dt>Respuesta docente</dt><dd class="feedback-text">{{ notice.response }}</dd></div>
+        <div><dt>Respuesta de Paridad</dt><dd class="feedback-text">{{ notice.response }}</dd></div>
         {% if notice.grade_at_resolution is not none %}
         <div><dt>Nota al concluir la revisión</dt><dd>{{ notice.grade_at_resolution }} / 50</dd></div>
         {% endif %}
@@ -59,7 +59,7 @@
 <div class="notice-detail-header">
   <h2 id="{{ heading_id }}" tabindex="-1">{{ notice_title(notice) }}</h2>
   <p class="notice-byline">
-    <span>Equipo docente de la asignatura</span>
+    <span>Paridad</span>
     <time datetime="{{ notice.activity_at.isoformat() }}">{{ notice.activity_at|date_label }}</time>
   </p>
 </div>
@@ -89,11 +89,11 @@
       {% endif %}
     </dl>
     {% endif %}
-    <p class="muted">El equipo docente revisará estos resultados junto con el contexto académico de su entrega antes de emitir una decisión.</p>
+    <p class="muted">Paridad señala estos resultados para su revisión junto con el contexto académico de la entrega.</p>
   </section>
 {% else %}
   <section class="notice-detail-section">
-    <p>El equipo docente le solicita revisar el resultado del análisis de sus entregas y las observaciones disponibles.</p>
+    <p>Paridad le solicita revisar el resultado del análisis de sus entregas y las observaciones disponibles.</p>
     {% if notice.related_deliveries %}
     <h3>Entregas por revisar</h3>
     <ul class="notice-deliveries">

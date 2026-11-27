@@ -47,7 +47,7 @@
       <summary>Ajustar nota</summary>
       <form class="stack record-form" action="/admin/submissions/{{ grade.id }}/nota" method="post">
         {{ csrf(user) }}
-        <label>Nota docente (0 a 50)
+        <label>Nota ajustada (0 a 50)
           <input type="number" name="grade" min="0" max="50" value="{{ grade.grade_override if grade.grade_override is not none else '' }}">
         </label>
         <p class="field-help">Deja la nota vacía para usar la nota automática.</p>
@@ -63,7 +63,7 @@
   <section class="card" id="aclaracion">
     <h2>Aclaración solicitada</h2>
     {% if request.query_params.get("respuesta") == "enviada" and grade.response %}
-    <p class="callout" role="status">Respuesta enviada al hilo del estudiante.</p>
+    <p class="callout" role="status">Respuesta publicada en el hilo de Paridad.</p>
     {% endif %}
     {{ clarification_content(grade) }}
     {% if grade.clarification_status == 'pending' %}

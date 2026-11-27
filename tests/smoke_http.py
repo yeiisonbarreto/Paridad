@@ -284,7 +284,7 @@ def main():
         assert_status(first.post(read_path, data={"csrf": first_csrf}), 422)
         private_ids = re.findall(r'name="notice_id" value="([^"]+)"', assert_status(first.get("/student/avisos")).text)
         opened = post(first, read_path, first_csrf, 200, notice_id=private_ids[0], abrir="true")
-        assert "El equipo docente le solicita" in opened.text
+        assert "Paridad le solicita" in opened.text
         assert "Entregas por revisar" in opened.text
         assert "primero.c" in opened.text and "mismo-estudiante.c" in opened.text
         assert "compania.c" not in opened.text and second_name not in opened.text
@@ -310,7 +310,7 @@ def main():
         assert 0 <= graded["grade"] <= 50
         grade_url = f"/student/submissions/{graded['id']}/nota"
         grade_html = assert_status(first.get(grade_url)).text
-        assert "Comentarios en inglés" in grade_html
+        assert "Comentarios" in grade_html
         assert grade_html.count("<textarea") == 1 and 'name="reason"' in grade_html
         assert_status(second.get(grade_url), 404)
         pending_url = "/api/admin/aclaraciones/pendientes"
@@ -328,7 +328,7 @@ def main():
         thread = re.compile(r'data-refresh-thread(?P<unread> data-unread)?[^>]*>.*?name="notice_id" value="([^"]+)"', re.S)
         student_inbox = assert_status(first.get("/student/avisos")).text
         entry = thread.search(student_inbox)
-        assert entry["unread"] and "Equipo docente de la asignatura" in student_inbox
+        assert entry["unread"] and "Paridad" in student_inbox
         thread_id = entry[2]
         post(second, read_path, second_csrf, 404, notice_id=thread_id)
 
@@ -337,7 +337,7 @@ def main():
         }, headers={"Accept": "application/json"})
         pending_thread = assert_status(opened).json()
         assert "Solicitud recibida" in pending_thread["content"]
-        assert "Resolución docente" not in pending_thread["content"] and pending_thread["unread"] == 0
+        assert "Resolución de Paridad" not in pending_thread["content"] and pending_thread["unread"] == 0
 
         decision = f"/admin/submissions/{graded['id']}/aclaracion"
         post(first, decision, first_csrf, 403, decision="resolved", response="Sin acceso")
@@ -355,7 +355,7 @@ def main():
         }, headers={"Accept": "application/json"})
         history_thread = assert_status(response).json()
         assert history_thread["activity_tick"] > pending_thread["activity_tick"]
-        assert "Solicitud recibida" in history_thread["content"] and "Resolución docente" in history_thread["content"]
+        assert "Solicitud recibida" in history_thread["content"] and "Resolución de Paridad" in history_thread["content"]
         assert "Comentario del docente" in history_thread["content"] and "42 / 50" in history_thread["content"]
         assert "compania.c" not in history_thread["content"] and second_name not in history_thread["content"]
 

@@ -2,6 +2,7 @@
 {% from "macros.html" import bulk_controls, csrf, pagination %}
 {% from "report-components.html" import results_filters, submission_table %}
 {% block title %}Archivos · Paridad{% endblock %}
+{% block head %}<script src="/static/submissions.min.js" defer></script>{% endblock %}
 {% block content %}
 <div class="page-heading"><h1>Archivos subidos</h1></div>
 {{ results_filters('/admin/submissions', labs, languages, selected_activity, selected_language) }}
@@ -17,4 +18,16 @@
   {{ submission_table(submissions, user, selection_form='file-selection', archive=true) }}
   {{ pagination('/admin/submissions', page, has_next, ('&activity_id=' ~ selected_activity if selected_activity else '') ~ ('&language_id=' ~ selected_language if selected_language else '')) }}
 </section>
+<dialog class="notice-dialog" id="delete-file-dialog" aria-labelledby="delete-file-title">
+  <form method="dialog" class="notice-dialog-inner stack">
+    {{ csrf(user) }}
+    <h2 id="delete-file-title">¿Eliminar archivos?</h2>
+    <p data-delete-description></p>
+    <p class="muted">Paridad actualizará las comparaciones y los resultados afectados.</p>
+    <div class="notice-dialog-actions">
+      <button type="submit" value="cancel" class="button secondary" autofocus>Cancelar</button>
+      <button type="submit" value="delete" class="button danger">Eliminar definitivamente</button>
+    </div>
+  </form>
+</dialog>
 {% endblock %}

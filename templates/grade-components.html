@@ -8,12 +8,14 @@
     <dl class="grade-breakdown">
       <div><dt>Estructura</dt><dd>{{ grade.rubric.structure }} / 15</dd></div>
       <div><dt>Buenas prácticas</dt><dd>{{ grade.rubric.practices }} / 10</dd></div>
-      <div><dt>Comentarios en inglés</dt><dd>{{ grade.rubric.english_comments }} / 10</dd></div>
+      <div><dt>Comentarios</dt><dd>{{ grade.rubric.get('comments', grade.rubric.get('english_comments')) }} / 10</dd></div>
       <div><dt>Similitud</dt><dd>{{ grade.automatic_grade - grade.quality_points }} / 15</dd></div>
     </dl>
-    <p class="muted">{{ grade.rubric.comments_english }} de {{ grade.rubric.comments_found }} comentarios identificados como inglés.</p>
+    {% if grade.rubric.comments_descriptive is defined %}
+    <p class="muted">{{ grade.rubric.comments_descriptive }} de {{ grade.rubric.comments_found }} comentarios descriptivos.</p>
     {% endif %}
-    {% if grade.grade_override is not none %}<p class="muted">Nota ajustada por el equipo docente{% if grade.automatic_grade is not none %} · Automática {{ grade.automatic_grade }} / 50{% endif %}</p>{% endif %}
+    {% endif %}
+    {% if grade.grade_override is not none %}<p class="muted">Nota ajustada en Paridad{% if grade.automatic_grade is not none %} · Automática {{ grade.automatic_grade }} / 50{% endif %}</p>{% endif %}
   {% endif %}
   {% if grade.grade_note and grade.grade_note != grade.response %}<p class="feedback-text">{{ grade.grade_note }}</p>{% endif %}
 {% endmacro %}
@@ -30,5 +32,5 @@
   <h3>Motivo</h3>
   <p class="feedback-text">{{ grade.reason }}</p>
   {% if grade.comments %}<h3>Otros comentarios</h3><p class="feedback-text">{{ grade.comments }}</p>{% endif %}
-  {% if grade.response %}<h3>Respuesta del equipo docente</h3><p class="feedback-text">{{ grade.response }}</p>{% endif %}
+  {% if grade.response %}<h3>Respuesta de Paridad</h3><p class="feedback-text">{{ grade.response }}</p>{% endif %}
 {% endmacro %}

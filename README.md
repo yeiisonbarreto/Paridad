@@ -12,7 +12,7 @@ cp .env.example .env
 sed -i "s/^POSTGRES_PASSWORD=$/POSTGRES_PASSWORD=$(openssl rand -hex 32)/" .env
 sed -i "s/^PARIDAD_DB_PASSWORD=$/PARIDAD_DB_PASSWORD=$(openssl rand -hex 32)/" .env
 docker compose up -d --build --wait
-docker compose run --rm migrate python -m paridad.cli create-admin docente --name "Docente administrador"
+docker compose run --rm migrate python -m paridad.cli create-admin docente --name "Administrador"
 ```
 
 1. Abre <http://localhost:8787> e inicia sesión como `docente` con la contraseña que te pidió el comando.
@@ -57,7 +57,7 @@ En **Informes**, **Descargar Excel** está al lado de la selección. Si marcas a
 
 ## Notas, avisos y aclaraciones
 
-Cada estudiante puede tener hasta tres archivos en total. El administrador puede liberar cupo eliminando una entrega. Los archivos históricos se conservan. La nota automática combina estructura (15 puntos), buenas prácticas y nombres legibles (10), comentarios en inglés (10) y similitud (15). El criterio de inglés usa una heurística de vocabulario y asigna cero si faltan comentarios. La similitud reduce progresivamente sus puntos a medida que aumenta el porcentaje. Los indicios de IA se usan para avisos de revisión. El análisis estático evalúa el texto y la estructura del archivo sin ejecutar el programa.
+Cada estudiante puede tener hasta tres archivos en total. El administrador puede liberar cupo eliminando una entrega. Los archivos históricos se conservan. La nota automática combina estructura (15 puntos), buenas prácticas y nombres legibles (10), comentarios descriptivos (10) y similitud (15). En las entregas nuevas, los comentarios se valoran por su contenido descriptivo. Las entregas anteriores conservan los puntos registrados en este criterio. La similitud reduce progresivamente sus puntos a medida que aumenta el porcentaje. Los indicios de IA se usan para avisos de revisión. El análisis estático evalúa el texto y la estructura del archivo sin ejecutar el programa.
 
 El estudiante consulta el desglose desde su historial y puede solicitar una aclaración por archivo. En **Aclaraciones**, en el menú superior, el administrador puede responder, resolver o rechazar la solicitud y ajustar la nota. El Excel distingue la nota automática, la docente y la final.
 

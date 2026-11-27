@@ -84,15 +84,16 @@ El lexer conserva cada token con su número de línea original. Separa comentari
 
 La versión `lexical-1` tiene alcance léxico. La semántica, la expansión de macros y las particularidades de todos los dialectos quedan fuera de esa versión. El límite es de 128 KiB de UTF-8 y 8000 tokens. Se rechazan archivos vacíos o con controles binarios.
 
-### Similitud y fragmentos
+### Similitud de código
 
-- Se indexan los **8-gramas canónicos** en un diccionario que conserva posiciones y multiplicidades. El coeficiente Dice es `2 × gramos comunes / (gramos de A + gramos de B)`. La intersección cuenta el mínimo de apariciones para cada grama.
-- Se emparejan ocurrencias por orden para acotar el costo en regiones repetitivas. Las ventanas coincidentes adyacentes con el mismo desplazamiento forman bloques. Se priorizan los bloques más largos y se descartan los que se solapan en cualquiera de las dos entregas.
-- La cobertura es `2 × tokens de los bloques elegidos / (tokens de A + tokens de B)`. Se guarda `0,70 × Dice + 0,30 × cobertura`, redondeado a dos decimales porcentuales. La cobertura compara bloques incluso si cambian de posición.
-- Para archivos con menos de ocho tokens se compara la secuencia canónica completa, con resultado de 0 o 100 %. El informe identifica estos casos. Un programa pequeño o una plantilla compartida puede producir similitud alta por razones legítimas.
-- Cada bloque se proyecta a rangos inclusivos de líneas originales. El informe conserva hasta los 25 bloques con mayor cobertura y enlaza al código completo de cada archivo. El informe muestra los dos archivos lado a lado, resalta el rango coincidente y presenta hasta tres líneas de contexto antes y después. Los bloques largos se recorren en tramos de 60 líneas. Los rangos incluyen cualquier texto intermedio entre los tokens alineados.
+El comparador `tiling-2` toma como referencias la normalización local de huellas de MOSS, la selección de bloques no superpuestos de JPlag y el trabajo de KIT sobre coincidencias fragmentadas. Paridad analiza localmente los tokens que ya tenía registrados y conserva el alcance por actividad y lenguaje. [Winnowing](https://theory.stanford.edu/~aiken/publications/papers/sigmod03.pdf) [JPlag](https://github.com/jplag/JPlag) [Coincidencias fragmentadas](https://publikationen.bibliothek.kit.edu/en/1000167446)
 
-El límite por defecto es de 250 entregas por combinación actividad/lenguaje. Una entrega nueva hace hasta 249 comparaciones con ese valor. Puedes ajustar el límite con `PARIDAD_SCOPE_LIMIT`. El total de pares en un ámbito crece cuadráticamente. Ajustar los límites requiere medir las colas y los tiempos con archivos representativos.
+- Las ventanas canónicas de seis tokens generan anclas que permiten localizar coincidencias aunque cambien los identificadores o se muevan bloques. Se prueban distintas ocurrencias para las huellas poco frecuentes y se acota el trabajo para las huellas repetidas.
+- El comparador toma primero los bloques más largos y cuenta cada token una vez por archivo. Los huecos cortos entre dos bloques confirmados se alinean de manera local. Los fragmentos visibles conservan los números de línea en ambos archivos.
+- El puntaje combina la cobertura conjunta (85 %) y Dice de huellas con frecuencia acotada (15 %). A partir de 24 tokens coincidentes y un bloque de al menos 12 tokens, también se considera el 85 % de la cobertura del archivo más corto. El informe muestra la cobertura de cada archivo para explicar ese caso.
+- Las muestras menores a ocho tokens se comparan por coincidencia canónica completa y llevan la indicación de muestra breve. Una solución común, una plantilla o un fragmento pequeño pueden coincidir por razones legítimas. El puntaje orienta la revisión de los fragmentos.
+
+Al actualizar, el trabajador vuelve a calcular las comparaciones `lexical-1` en lotes y actualiza la similitud máxima y el componente automático de originalidad. Los ajustes manuales de nota y los avisos ya emitidos conservan sus datos. Mientras queden comparaciones anteriores para una entrega, Paridad espera a completar su actualización para generar un aviso de similitud.
 
 ### Indicio de IA y crédito
 
@@ -108,7 +109,7 @@ El total se multiplica por el mínimo entre 1, `tokens / 100` y `líneas de cód
 
 ### Nota y aclaraciones
 
-La nota automática suma hasta 15 puntos de estructura, 10 de prácticas, 10 de comentarios en inglés y 15 de similitud. Estructura incluye consistencia de sangría, longitud de línea y organización léxica. Prácticas incluye nombres, marcas de trabajo pendiente y algunas funciones problemáticas en C. El vocabulario estimado del comentario orienta el criterio de inglés y el administrador puede corregir el resultado. Los puntos de similitud se calculan como el entero más próximo a `15 × (1 − similitud)`. El máximo de similitud puede cambiar cuando se analiza una entrega nueva o se elimina una existente, y PostgreSQL actualiza la nota automática con ese cambio. Una nota docente prevalece sobre el cálculo automático hasta que el administrador restaura la rúbrica.
+La nota automática suma hasta 15 puntos de estructura, 10 de prácticas, 10 de comentarios y 15 de similitud. Estructura incluye consistencia de sangría, longitud de línea y organización léxica. Prácticas incluye nombres, marcas de trabajo pendiente y algunas funciones problemáticas en C. El criterio de comentarios considera la proporción de fragmentos descriptivos. El administrador puede ajustar la nota. Los puntos de similitud se calculan como el entero más próximo a `15 × (1 − similitud)`. El máximo de similitud puede cambiar cuando se analiza una entrega nueva o se elimina una existente, y PostgreSQL actualiza la nota automática con ese cambio. Una nota docente prevalece sobre el cálculo automático hasta que el administrador restaura la rúbrica.
 
 ## Autorización y endpoints
 

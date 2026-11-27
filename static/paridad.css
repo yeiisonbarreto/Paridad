@@ -519,3 +519,16 @@ code { font: 0.85rem/1.55 ui-monospace, "Cascadia Code", monospace; }
 .notice-thread-fields { margin: 0; display: grid; gap: 0.45rem; }
 .notice-thread-fields dt { color: var(--muted); font-size: 0.82rem; }
 .notice-thread-fields dd { margin: 0; overflow-wrap: anywhere; }
+
+.file-menu .file-actions[popover] {
+  position: fixed;
+  inset: auto;
+  margin: 0;
+  max-width: calc(100vw - 1rem);
+  max-height: calc(100dvh - 1rem);
+  overflow: auto;
+  background: var(--paper);
+  color: var(--ink);
+  box-shadow: var(--shadow-menu);
+}
+.file-menu .file-actions[popover]:not(:popover-open) { display: none; }

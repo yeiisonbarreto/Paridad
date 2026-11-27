@@ -16,7 +16,7 @@ MOODLE_FRAME_ORIGINS=
 ```sh
 docker compose -f docker-compose.yml -f compose.tls.yml up -d --build --wait
 docker compose -f docker-compose.yml -f compose.tls.yml run --rm migrate \
-  python -m paridad.cli create-admin docente --name "Docente administrador"
+  python -m paridad.cli create-admin docente --name "Administrador"
 curl --fail https://paridad.universidad.edu/healthz
 ```
 
@@ -24,11 +24,11 @@ El perfil TLS publica HTTPS. Coordina la emisión y renovación de certificados 
 
 ## Avisos y acceso de los estudiantes
 
-**Avisos** muestra al estudiante sus mensajes y el contador de pendientes de lectura. Al abrir un mensaje en la ventana flotante, Paridad lo marca como leído. Los avisos automáticos nuevos guardan el resultado y el umbral vigentes al publicarse. Los mensajes del equipo docente muestran las entregas propias incluidas en la selección. Paridad publica un aviso cuando una entrega supera el umbral de similitud o de indicio de IA sin declarar. El trabajador revisa también las entregas anteriores y registra cada tipo de alerta una vez por archivo. Los avisos propios se actualizan aproximadamente cada diez segundos con la página abierta.
+**Avisos** muestra al estudiante sus mensajes y el contador de pendientes de lectura. Al abrir un mensaje en la ventana flotante, Paridad lo marca como leído. Los avisos automáticos nuevos guardan el resultado y el umbral vigentes al publicarse. Los avisos manuales de Paridad muestran las entregas propias incluidas en la selección. Paridad publica un aviso cuando una entrega supera el umbral de similitud o de indicio de IA sin declarar. El trabajador revisa también las entregas anteriores y registra cada tipo de alerta una vez por archivo. Los avisos propios se actualizan aproximadamente cada diez segundos con la página abierta.
 
 En **Informes**, selecciona entregas y pulsa **Enviar aviso** y confirma para publicar un mensaje por estudiante. La confirmación aparece en la misma página. El menú **Acciones** de Archivos permite hacerlo para uno solo. Paridad omite las cuentas inactivas y evita publicar avisos manuales repetidos al mismo estudiante en un minuto. La migración conserva los avisos anteriores en la bandeja, inicialmente como pendientes de lectura. Los sonidos de envío y recepción se activan al interactuar con la página y dependen de la configuración de audio del navegador.
 
-Una solicitud de aclaración genera una confirmación de recepción. Cuando el equipo docente envía su decisión desde **Aclaraciones**, Paridad actualiza el mismo hilo y lo marca como pendiente de lectura. El hilo muestra el motivo original, la respuesta y las notas registradas al solicitar y resolver. El menú del panel docente indica cuántas aclaraciones están pendientes.
+Una solicitud de aclaración genera una confirmación de recepción. Cuando se publica la decisión en **Aclaraciones**, Paridad actualiza el mismo hilo y lo marca como pendiente de lectura. El hilo muestra el motivo original, la respuesta y las notas registradas al solicitar y resolver. El menú del panel docente indica cuántas aclaraciones están pendientes.
 
 En **Cuentas**, abre una cuenta activa y usa **Generar enlace de invitación** para obtener un enlace personal que caduca en 24 horas. Generar otro enlace invalida el anterior. Usarlo, cambiar el correo, restablecer la contraseña o inhabilitar la cuenta también lo invalida.
 

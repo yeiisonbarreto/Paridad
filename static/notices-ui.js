@@ -68,19 +68,21 @@ async function noticeRequest(url, body) {
   return result;
 }
 
+const toast = document.querySelector("#notice-toast");
+let toastTimeout;
+
+function showNoticeToast(message, kind) {
+  if (!toast) return;
+  window.clearTimeout(toastTimeout);
+  toast.dataset.kind = kind;
+  toast.textContent = message;
+  toastTimeout = window.setTimeout(() => { toast.textContent = ""; }, 6500);
+}
+
 const sendNoticeDialog = document.querySelector("#send-notice-dialog");
 if (sendNoticeDialog?.showModal) {
-  const toast = document.querySelector("#notice-toast");
   let confirmation;
   let sendingNotice = false;
-  let toastTimeout;
-
-  function showNoticeToast(message, kind) {
-    window.clearTimeout(toastTimeout);
-    toast.dataset.kind = kind;
-    toast.textContent = message;
-    toastTimeout = window.setTimeout(() => { toast.textContent = ""; }, 6500);
-  }
 
   document.addEventListener("submit", event => {
     const form = event.target;

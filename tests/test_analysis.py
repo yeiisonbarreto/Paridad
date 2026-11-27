@@ -79,6 +79,61 @@ class AnalysisTests(unittest.TestCase):
         self.assertEqual(compare(size_a, size_b)[0], 0)
         self.assertEqual(compare(prepare("int x = 2;"), prepare("char *y;"))[0], 0)
 
+    def test_reordered_functions_with_insertions_and_changed_operations(self):
+        first = """int acumular(int limite, int *datos) {
+            int resultado = 0;
+            for (int i = 0; i < limite; i++) {
+                if (datos[i] >= 2 && datos[i] % 3 == 0) resultado += datos[i] * i;
+                else resultado -= datos[i];
+            }
+            return resultado;
+        }"""
+        renamed = first.replace("acumular", "sumar").replace("datos", "valores").replace("resultado", "acumulado")
+        edited = renamed.replace("int acumulado = 0;", 'int acumulado = 7; printf("inicio");')
+        edited = edited.replace(">=", "<=").replace("else acumulado -=", "else if (limite > 3) acumulado -=")
+        second = """int filtrar(int tope, int paso) {
+            while (paso > 0 && tope != 0) { tope >>= paso; if (tope & 2) return ~tope; paso -= 1; }
+            return tope | paso;
+        }"""
+        left = prepare(first + "\n" + second)
+        right = prepare(second + "\n" + edited)
+        score, metrics, fragments = compare(left, right)
+        reverse_score, reverse_metrics, _ = compare(right, left)
+        self.assertGreater(score, 8800)
+        self.assertEqual(score, reverse_score)
+        self.assertEqual(metrics["left_coverage_bp"], reverse_metrics["right_coverage_bp"])
+        self.assertTrue(any(fragment["left"][0] > fragment["right"][0] for fragment in fragments))
+        self.assertLessEqual(metrics["matched_tokens"], min(len(left.tokens), len(right.tokens)))
+
+    def test_nontrivial_contained_copy_receives_directional_score(self):
+        copied = """int acumular(int limite, int *datos) {
+            int resultado = 0;
+            for (int i = 0; i < limite; i++) {
+                if (datos[i] >= 2 && datos[i] % 3 == 0) resultado += datos[i] * i;
+                else resultado -= datos[i];
+            }
+            return resultado;
+        }"""
+        surrounding = "\n".join(
+            f"void tarea_{number}(void) {{ while (ready(i)) switch(stage()) "
+            "{ case 4: tick(); break; default: fallback(); } }"
+            for number in range(12)
+        )
+        renamed = copied.replace("acumular", "sumar").replace("datos", "valores")
+        score, metrics, fragments = compare(prepare(copied), prepare(surrounding + "\n" + renamed + "\n" + surrounding))
+        self.assertGreaterEqual(score, 8500)
+        self.assertEqual(metrics["left_coverage_bp"], 10000)
+        self.assertLess(metrics["right_coverage_bp"], 1500)
+        self.assertEqual(fragments[0]["right"][0], 13)
+
+    def test_small_shared_boilerplate_does_not_trigger_containment(self):
+        boilerplate = "#include <stdio.h>\n"
+        left = prepare(boilerplate + "int uno(int limite) { while(limite>0) limite >>= 2; return ~limite; }")
+        right = prepare(boilerplate + "void dos(void) { switch(scanf(forma, &valor)) { case 1: puts(otro); break; } }")
+        score, metrics, _ = compare(left, right)
+        self.assertLess(score, 4000)
+        self.assertLess(metrics["matched_tokens"], 24)
+
     def test_style_score_is_bounded_and_explained(self):
         short, evidence = analyze_style(tokenize("int x;", "c", {}))
         self.assertLess(short, 3000)

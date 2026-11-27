@@ -343,7 +343,9 @@ def confirm_bulk_submission_deletion(request: Request, csrf: Csrf, token: Annota
         user = administrator(conn, request, csrf)
         ids = [UUID(item) for item in consume_deletion(conn, user["id"], "submissions", token)]
         lock_submission_scopes(conn, ids)
-        delete_submissions(conn, ids)
+        deleted = delete_submissions(conn, ids)
+    if wants_json(request):
+        return JSONResponse({"deleted": deleted})
     return redirect("/admin/submissions")
 
 
@@ -379,7 +381,9 @@ def remove_submission(request: Request, submission_id: UUID, csrf: Csrf):
         administrator(conn, request, csrf)
         lock_submission_scopes(conn, [submission_id])
         submission_metadata(conn, submission_id)
-        delete_submissions(conn, [submission_id])
+        deleted = delete_submissions(conn, [submission_id])
+    if wants_json(request):
+        return JSONResponse({"deleted": deleted})
     return redirect("/admin/submissions")
 
 

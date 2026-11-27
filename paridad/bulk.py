@@ -3,9 +3,10 @@
 from uuid import UUID
 
 from fastapi import HTTPException
+from starlette.responses import JSONResponse
 from psycopg.types.json import Jsonb
 
-from .web import view
+from .web import view, wants_json
 
 
 def deletion_preview(conn, request, user, kind: str, targets: list):
@@ -16,6 +17,8 @@ def deletion_preview(conn, request, user, kind: str, targets: list):
            VALUES (%s, %s, %s, now() + interval '10 minutes') RETURNING id""",
         (user["id"], kind, Jsonb([str(target) for target in targets])),
     ).fetchone()
+    if kind == "submissions" and wants_json(request):
+        return JSONResponse({"token": str(row["id"]), "count": len(targets)})
     return view(
         request, "bulk-delete.html", user=user, kind=kind, token=row["id"], count=len(targets),
     )

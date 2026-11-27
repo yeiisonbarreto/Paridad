@@ -2,13 +2,21 @@
 
 import re
 from collections import Counter, defaultdict
+from difflib import SequenceMatcher
+from itertools import product
 from dataclasses import dataclass
 from statistics import pstdev
 
 from .config import MAX_TOKENS
 
 ANALYSIS_VERSION = "lexical-1"
-K = 8
+SIMILARITY_VERSION = "tiling-2"
+K = 6
+SHORT_SAMPLE_TOKENS = 8
+MAX_ANCHOR_COMBINATIONS = 48
+MAX_LOCAL_GAP = 14
+MIN_CONTAINMENT_TOKENS = 24
+MIN_CONTAINMENT_BLOCK = 12
 MAX_FRAGMENTS = 25
 
 C_WORDS = frozenset("""
@@ -99,6 +107,7 @@ class Prepared:
     tokens: list[str]
     lines: list[int]
     grams: dict[tuple[str, ...], list[int]]
+    normalized: tuple[str, ...]
 
     @classmethod
     def from_analysis(cls, stored: dict):
@@ -106,7 +115,7 @@ class Prepared:
         grams = defaultdict(list)
         for i in range(max(0, len(tokens) - K + 1)):
             grams[canonical(tokens[i:i + K])].append(i)
-        return cls(tokens, lines, grams)
+        return cls(tokens, lines, grams, canonical(tokens))
 
 
 def arm_keyword(word: str) -> bool:
@@ -250,50 +259,127 @@ def line_fragment(left: Prepared, right: Prepared, start_a: int, start_b: int, l
     }
 
 
-def compare(left: Prepared, right: Prepared) -> tuple[int, dict, list[dict]]:
+def anchor_pairs(left: list[int], right: list[int]):
+    """Enumerate uncommon anchor matches and bound the cost of repeated ones."""
+    if len(left) * len(right) <= MAX_ANCHOR_COMBINATIONS:
+        yield from product(left, right)
+        return
+    yield from zip(left, right)
+    # Nearby ranks keep a recurring anchor useful after an insertion or deletion.
+    yield from zip(left[1:], right)
+    yield from zip(left, right[1:])
+    difference = len(left) - len(right)
+    if difference > 0:
+        yield from zip(left[difference:], right)
+    elif difference < 0:
+        yield from zip(left, right[-difference:])
+
+
+def anchor_blocks(left: Prepared, right: Prepared):
+    diagonals = defaultdict(list)
+    for gram, positions in left.grams.items():
+        matching = right.grams.get(gram)
+        if not matching or not any(not token.startswith(("P:", "L:")) for token in gram):
+            continue
+        for start_a, start_b in anchor_pairs(positions, matching):
+            diagonals[start_a - start_b].append(start_a)
+
+    for offset, starts in diagonals.items():
+        positions = sorted(set(starts))
+        run_start = last = positions[0]
+        for start in positions[1:]:
+            if start > last + 1:
+                yield run_start, run_start - offset, last + K - run_start
+                run_start = start
+            last = start
+        yield run_start, run_start - offset, last + K - run_start
+
+
+def claim_tiles(candidates, occupied_a, occupied_b, minimum):
+    for start_a, start_b, length in sorted(candidates, key=lambda tile: (-tile[2], tile[0], tile[1])):
+        # Recover free subranges when the end of a candidate overlaps a longer block.
+        start = 0
+        for offset in range(length + 1):
+            if offset == length or occupied_a[start_a + offset] or occupied_b[start_b + offset]:
+                if offset - start >= minimum:
+                    size = offset - start
+                    index_a, index_b = start_a + start, start_b + start
+                    occupied_a[index_a:index_a + size] = occupied_b[index_b:index_b + size] = b"\x01" * size
+                    yield index_a, index_b, size
+                start = offset + 1
+
+
+def gap_matches(left: Prepared, right: Prepared, blocks):
+    ordered = sorted(blocks)
+    for (start_a, start_b, length), (next_a, next_b, _) in zip(ordered, ordered[1:]):
+        end_a, end_b = start_a + length, start_b + length
+        size_a, size_b = next_a - end_a, next_b - end_b
+        if not (2 <= size_a <= MAX_LOCAL_GAP and 2 <= size_b <= MAX_LOCAL_GAP):
+            continue
+        # Only inspect small gaps between two already established matches.
+        gap_a = canonical(left.tokens[end_a:next_a])
+        gap_b = canonical(right.tokens[end_b:next_b])
+        matcher = SequenceMatcher(None, gap_a, gap_b, autojunk=False)
+        for offset_a, offset_b, size in matcher.get_matching_blocks():
+            if size >= 2 and any(not token.startswith("P:") for token in gap_a[offset_a:offset_a + size]):
+                yield end_a + offset_a, end_b + offset_b, size
+
+
+def fingerprint_dice(left: Prepared, right: Prepared) -> float:
+    # Cap repeated windows so a mechanically repeated pattern does not dominate Dice.
+    count_a = sum(min(len(starts), 4) for starts in left.grams.values())
+    count_b = sum(min(len(starts), 4) for starts in right.grams.values())
+    common = sum(min(len(starts), len(right.grams.get(gram, ())), 4) for gram, starts in left.grams.items())
+    return 2 * common / (count_a + count_b)
+
+
+def compare_in_order(left: Prepared, right: Prepared) -> tuple[int, dict, list[dict]]:
     size_a, size_b = len(left.tokens), len(right.tokens)
-    if min(size_a, size_b) < K:
-        equal = canonical(left.tokens) == canonical(right.tokens)
+    short = min(size_a, size_b) < SHORT_SAMPLE_TOKENS
+    equal = left.normalized == right.normalized
+    if short:
         bp = 10000 if equal else 0
         return bp, {"short_sample": True, "dice_bp": bp, "coverage_bp": bp, "block_count": int(equal)}, (
             [line_fragment(left, right, 0, 0, size_a)] if equal else []
         )
 
-    diagonals = defaultdict(list)
-    common = 0
-    for gram, left_positions in left.grams.items():
-        right_positions = right.grams.get(gram, ())
-        common += min(len(left_positions), len(right_positions))
-        for start_a, start_b in zip(left_positions, right_positions):
-            diagonals[start_a - start_b].append(start_a)
+    if equal:
+        blocks = [(0, 0, size_a)]
+        dice = 1.0
+    else:
+        occupied_a, occupied_b = bytearray(size_a), bytearray(size_b)
+        blocks = list(claim_tiles(anchor_blocks(left, right), occupied_a, occupied_b, K))
+        near_matches = list(gap_matches(left, right, blocks))
+        blocks.extend(claim_tiles(near_matches, occupied_a, occupied_b, 2))
+        dice = fingerprint_dice(left, right)
 
-    candidates = []
-    for offset, starts in diagonals.items():
-        positions = sorted(starts)
-        run_start = last_start = positions[0]
-        for start in positions[1:]:
-            if start > last_start + 1:
-                candidates.append((last_start + K - run_start, run_start, run_start - offset))
-                run_start = start
-            last_start = start
-        candidates.append((last_start + K - run_start, run_start, run_start - offset))
-
-    occupied_a, occupied_b = bytearray(size_a), bytearray(size_b)
-    coverage = 0
-    blocks = []
-    for length, start_a, start_b in sorted(candidates, key=lambda block: (-block[0], block[1], block[2])):
-        end_a, end_b = start_a + length, start_b + length
-        if any(occupied_a[start_a:end_a]) or any(occupied_b[start_b:end_b]):
-            continue
-        occupied_a[start_a:end_a] = occupied_b[start_b:end_b] = b"\x01" * length
-        coverage += length
-        blocks.append((start_a, start_b, length))
-
-    dice = 2 * common / (size_a + size_b - 2 * K + 2)
-    token_coverage = 2 * coverage / (size_a + size_b)
-    return round(10000 * (0.7 * dice + 0.3 * token_coverage)), {
+    covered = sum(length for _, _, length in blocks)
+    coverage = 2 * covered / (size_a + size_b)
+    score = 0.85 * coverage + 0.15 * dice
+    longest = max((length for _, _, length in blocks), default=0)
+    if covered >= MIN_CONTAINMENT_TOKENS and longest >= MIN_CONTAINMENT_BLOCK:
+        score = max(score, 0.85 * covered / min(size_a, size_b))
+    evidence = sorted(blocks, key=lambda tile: (-tile[2], tile[0], tile[1]))[:MAX_FRAGMENTS]
+    return round(10000 * score), {
         "short_sample": False,
         "dice_bp": round(10000 * dice),
-        "coverage_bp": round(10000 * token_coverage),
+        "coverage_bp": round(10000 * coverage),
+        "left_coverage_bp": round(10000 * covered / size_a),
+        "right_coverage_bp": round(10000 * covered / size_b),
+        "matched_tokens": covered,
         "block_count": len(blocks),
-    }, [line_fragment(left, right, *block) for block in sorted(blocks[:MAX_FRAGMENTS])]
+    }, [line_fragment(left, right, *block) for block in sorted(evidence)]
+
+
+def compare(left: Prepared, right: Prepared) -> tuple[int, dict, list[dict]]:
+    # Resolve greedy ties in a stable order regardless of which file was uploaded first.
+    if left.normalized <= right.normalized:
+        return compare_in_order(left, right)
+    score, metrics, fragments = compare_in_order(right, left)
+    if not metrics["short_sample"]:
+        metrics["left_coverage_bp"], metrics["right_coverage_bp"] = (
+            metrics["right_coverage_bp"], metrics["left_coverage_bp"],
+        )
+    for fragment in fragments:
+        fragment["left"], fragment["right"] = fragment["right"], fragment["left"]
+    return score, metrics, sorted(fragments, key=lambda fragment: (fragment["left"], fragment["right"]))

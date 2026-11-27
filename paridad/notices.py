@@ -44,17 +44,21 @@ def publish_automatic(conn) -> None:
                SELECT s.id, s.student_id, s.max_similarity_bp, s.ai_bp,
                    COALESCE(a.similarity_threshold, cfg.similarity_threshold) AS similarity_threshold,
                    COALESCE(a.ai_threshold, cfg.ai_threshold) AS ai_threshold,
-                   NOT s.noticed_similarity AND s.max_similarity_bp >
-                       100 * COALESCE(a.similarity_threshold, cfg.similarity_threshold) AS similarity,
-                   NOT s.noticed_ai AND s.ai_credit IS NULL AND s.ai_bp >
-                       100 * COALESCE(a.ai_threshold, cfg.ai_threshold) AS ai
+                   signals.similarity, signals.ai
                FROM submissions s JOIN activities a ON a.id = s.activity_id
                JOIN users u ON u.id = s.student_id CROSS JOIN settings cfg
-               WHERE s.state = 'completed' AND u.active
-                 AND ((NOT s.noticed_similarity AND s.max_similarity_bp >
-                       100 * COALESCE(a.similarity_threshold, cfg.similarity_threshold))
-                   OR (NOT s.noticed_ai AND s.ai_credit IS NULL AND s.ai_bp >
-                       100 * COALESCE(a.ai_threshold, cfg.ai_threshold)))
+               CROSS JOIN LATERAL (
+                   SELECT NOT s.noticed_similarity AND s.max_similarity_bp >
+                          100 * COALESCE(a.similarity_threshold, cfg.similarity_threshold)
+                          AND NOT EXISTS (
+                              SELECT 1 FROM similarity_pairs p WHERE p.analysis_version = 'lexical-1'
+                                AND p.activity_id = s.activity_id AND p.language_id = s.language_id
+                                AND (p.left_id = s.id OR p.right_id = s.id)
+                          ) AS similarity,
+                          NOT s.noticed_ai AND s.ai_credit IS NULL AND s.ai_bp >
+                          100 * COALESCE(a.ai_threshold, cfg.ai_threshold) AS ai
+               ) signals
+               WHERE s.state = 'completed' AND u.active AND (signals.similarity OR signals.ai)
                ORDER BY s.created_at, s.id LIMIT 200 FOR NO KEY UPDATE OF s SKIP LOCKED
            ), published AS (
                INSERT INTO review_notices (
