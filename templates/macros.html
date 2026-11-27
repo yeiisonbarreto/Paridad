@@ -24,3 +24,9 @@
   </nav>
   {% endif %}
 {% endmacro %}
+
+{% macro school_logo(class_name) %}
+  <img class="{{ class_name }}" src="/static/escuela-colombiana-logo.png"
+       width="1174" height="600" alt="Escuela Colombiana de Ingeniería Julio Garavito, Universidad"
+       decoding="async">
+{% endmacro %}

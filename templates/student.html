@@ -8,19 +8,21 @@
   <p>{{ user.display_name }}</p>
 </div>
 <div class="student-layout">
-  <section class="card">
-    <h2>Subir archivo</h2>
+  <details class="card panel-disclosure" open>
+    <summary>Subir archivo</summary>
     {% if activities %}
-    <form action="/student/submissions" method="post" enctype="multipart/form-data" class="stack" id="submission-form">
+    <form action="/student/submissions" method="post" enctype="multipart/form-data" class="stack disclosure-content" id="submission-form">
       {{ csrf(user) }}
       <input type="hidden" name="request_id" value="{{ request_id }}">
-      <label>Actividad
+      <div class="field">
+        <label for="activity">Actividad</label>
         <select name="activity_id" required id="activity">
           <option value="">Selecciona la actividad</option>
           {% for id, name in activities.items() %}<option value="{{ id }}">{{ name }}</option>{% endfor %}
         </select>
-      </label>
-      <label>Lenguaje
+      </div>
+      <div class="field">
+        <label for="language">Lenguaje</label>
         <select name="language_id" required id="language">
           <option value="">Selecciona el lenguaje</option>
           {% for id, language in languages.items() %}
@@ -28,19 +30,19 @@
                   data-extensions="{{ language.extensions }}">{{ language.name }} ({{ language.extensions }})</option>
           {% endfor %}
         </select>
-      </label>
+      </div>
       <label>Archivo de código
         <input type="file" name="file" id="source" required aria-describedby="file-help">
       </label>
       <p class="field-help" id="file-help">Texto UTF-8 de hasta 128 KiB y 8000 tokens.</p>
       <label class="check"><input type="checkbox" name="ai_declared" id="ai-declared" value="true"> Usé una herramienta de IA</label>
-      <label>Crédito de IA
+      <label class="credit-field">Crédito de IA
         <textarea name="ai_credit" id="ai-credit" maxlength="1000" rows="3" placeholder="Herramienta y tipo de ayuda"></textarea>
       </label>
       <button type="submit" class="button">Enviar a análisis</button>
     </form>
-    {% else %}<p class="muted">En este momento no hay actividades abiertas.</p>{% endif %}
-  </section>
+    {% else %}<p class="muted disclosure-content">En este momento no hay actividades abiertas.</p>{% endif %}
+  </details>
   <section class="card history" aria-labelledby="history-heading">
     <h2 id="history-heading">Historial</h2>
     <p class="muted">La similitud puede actualizarse cuando se analizan nuevas entregas. El indicio de IA es orientativo.</p>
@@ -52,12 +54,12 @@
           <tbody>
           {% for result in results %}
           <tr>
-            <td><strong>{{ result.filename }}</strong><span class="table-detail">{{ result.activity }} · {{ result.language }}</span>
+            <td><span>{{ result.filename }}</span><span class="table-detail">{{ result.activity }} · {{ result.language }}</span>
               <time class="table-detail">{{ result.submitted_at|date_label }}</time>
             </td>
             {% if result.state == 'completed' %}
-              <td>{{ result.similarity_bp|percent }}{% if result.similarity_alert %}<span class="tag alert">Revisión</span>{% endif %}</td>
-              <td>{{ result.ai_bp|percent }}
+              <td class="numeric">{{ result.similarity_bp|percent }}{% if result.similarity_alert %}<span class="tag alert">Revisión</span>{% endif %}</td>
+              <td class="numeric">{{ result.ai_bp|percent }}
                 {% if result.ai_declared %}<span class="tag">Declarada</span>{% endif %}
                 {% if result.ai_alert %}<span class="tag alert">Revisión</span>{% endif %}
               </td>

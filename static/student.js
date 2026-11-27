@@ -21,6 +21,7 @@ if (activity && language && source && declared && credit) {
   function syncCredit() {
     credit.disabled = !declared.checked;
     credit.required = declared.checked;
+    credit.closest("label").hidden = !declared.checked;
   }
 
   activity.addEventListener("change", syncLanguages);

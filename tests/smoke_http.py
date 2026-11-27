@@ -227,8 +227,8 @@ def main():
         upload(first, first_csrf, activity_id, c_id, "largo.c", b"x" * (145 * 1024), status=413)
 
         account_page = assert_status(admin.get("/admin/accounts")).text
-        account_id = re.search(r'<summary>' + second_name + r'.*?</summary>\s*'
-                               r'<form action="/admin/accounts/(\d+)"', account_page, re.S)[1]
+        account_id = re.search(r'<small>' + re.escape(second_name) + r'</small>\s*</span>\s*</summary>\s*'
+                               r'<form action="/admin/accounts/(\d+)"', account_page)[1]
         post(admin, f"/admin/accounts/{account_id}", admin_csrf, display_name=second_name,
              active="true", new_password=secrets.token_urlsafe(18))
         assert_status(second.get("/api/student/submissions"), 401)

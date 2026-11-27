@@ -1,32 +1,68 @@
+{% from "macros.html" import school_logo %}
 <!doctype html>
 <html lang="es">
 <head>
   <meta charset="utf-8">
   <meta name="viewport" content="width=device-width, initial-scale=1">
+  <meta name="theme-color" content="#fcfaf8">
   <title>{% block title %}Paridad{% endblock %}</title>
   <link rel="stylesheet" href="/static/paridad.css">
+  <script src="/static/navigation.min.js" defer></script>
   {% block head %}{% endblock %}
 </head>
-<body>
+<body class="{% block body_class %}{% endblock %}">
   <a class="skip-link" href="#main">Saltar al contenido</a>
   <header class="site-header">
     <div class="shell header-row">
       <a class="brand" href="/"><span class="brand-mark" aria-hidden="true">P</span>Paridad</a>
       {% if user and user.role == 'ADMIN' %}
-      <nav aria-label="Administración">
-        {% for url, label in [('/admin', 'Panel'), ('/admin/accounts', 'Cuentas'), ('/admin/activities', 'Actividades'), ('/admin/reports', 'Informes')] %}
-          <a href="{{ url }}" {% if request.url.path == url %}aria-current="page"{% endif %}>{{ label }}</a>
-        {% endfor %}
+      {% set current = "Panel" %}
+      {% if request.url.path.startswith('/admin/accounts') %}{% set current = "Cuentas" %}
+      {% elif request.url.path.startswith('/admin/activities') %}{% set current = "Actividades" %}
+      {% elif request.url.path.startswith('/admin/reports') or request.url.path.startswith('/admin/submissions') %}
+        {% set current = "Informes" %}
+      {% endif %}
+      <nav class="section-nav" aria-label="Administración">
+        <details class="dropdown" name="header-menu" data-dropdown>
+          <summary class="menu-trigger" aria-label="Secciones de administración">
+            <span class="menu-symbol" aria-hidden="true"></span>
+            <span>{{ current }}</span>
+          </summary>
+          <ul class="menu-panel">
+            {% for url, label in [('/admin', 'Panel'), ('/admin/accounts', 'Cuentas'), ('/admin/activities', 'Actividades'), ('/admin/reports', 'Informes')] %}
+            <li><a href="{{ url }}" {% if current == label %}aria-current="page"{% endif %}>{{ label }}</a></li>
+            {% endfor %}
+          </ul>
+        </details>
       </nav>
       {% endif %}
       {% if user %}
-        <form action="/logout" method="post" class="logout">
-          <input type="hidden" name="csrf" value="{{ user.csrf }}">
-          <button class="button secondary small" type="submit">Cerrar sesión</button>
-        </form>
+      <details class="dropdown account-menu" name="header-menu" data-dropdown>
+        <summary class="menu-trigger" aria-label="Cuenta de {{ user.display_name }}">
+          <span class="account-initial" aria-hidden="true">{{ user.display_name[:1]|upper }}</span>
+          <span class="account-name">{{ user.display_name }}</span>
+        </summary>
+        <div class="menu-panel account-panel">
+          <div class="account-identity">
+            <span>{{ user.display_name }}</span>
+            {% if user.username %}<span class="table-detail">{{ user.username }}</span>{% endif %}
+          </div>
+          <form action="/logout" method="post">
+            <input type="hidden" name="csrf" value="{{ user.csrf }}">
+            <button class="menu-action" type="submit">Cerrar sesión</button>
+          </form>
+        </div>
+      </details>
       {% endif %}
     </div>
   </header>
   <main class="shell content" id="main">{% block content %}{% endblock %}</main>
+  {% block footer %}
+  <footer class="site-footer">
+    <div class="shell footer-row">
+      {{ school_logo('footer-logo') }}
+    </div>
+  </footer>
+  {% endblock %}
 </body>
 </html>

@@ -92,4 +92,9 @@ PARIDAD_TEST_ADMIN=docente python tests/smoke_http.py
 
 La prueba solicita la contraseña de forma interactiva. Para automatizarla en una instancia aislada, habilita `PARIDAD_TEST_PASSWORD` en el entorno de ese proceso. Por defecto usa `http://localhost:8787`. Configura `PARIDAD_TEST_URL` y, para un certificado de prueba, `PARIDAD_TEST_CA_FILE`. El script verifica TLS con las raíces del sistema o la CA declarada.
 
-El JavaScript de producción está minificado y forma parte del repositorio. Si editas `static/student.js`, regenera el archivo servido con `npx --yes terser@5.48.0 static/student.js --compress --mangle -o static/student.min.js`.
+El JavaScript de producción está minificado y forma parte del repositorio. Si editas alguno de los scripts, regenera su archivo servido.
+
+```sh
+npx --yes terser@5.48.0 static/student.js --compress --mangle -o static/student.min.js
+npx --yes terser@5.48.0 static/navigation.js --compress --mangle -o static/navigation.min.js
+```

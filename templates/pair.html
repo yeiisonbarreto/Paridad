@@ -28,11 +28,13 @@
   <h2>Bloques de líneas</h2>
   {% if pair.metrics.block_count > pair.fragments|length %}<p class="muted">Mostrando {{ pair.fragments|length }} de {{ pair.metrics.block_count }} bloques.</p>{% endif %}
   {% for fragment in pair.fragments %}
-    <p class="muted">{{ fragment.tokens }} tokens alineados</p>
-    <div class="grid-two">
-      {{ code_block(fragment.left, fragment.left_excerpt, pair.left_filename) }}
-      {{ code_block(fragment.right, fragment.right_excerpt, pair.right_filename) }}
-    </div>
+    <details class="record-disclosure" name="code-fragments"{% if loop.first %} open{% endif %}>
+      <summary>Bloque {{ loop.index }} · {{ fragment.tokens }} tokens alineados</summary>
+      <div class="grid-two disclosure-content">
+        {{ code_block(fragment.left, fragment.left_excerpt, pair.left_filename) }}
+        {{ code_block(fragment.right, fragment.right_excerpt, pair.right_filename) }}
+      </div>
+    </details>
   {% else %}<p class="empty">No hay bloques coincidentes.</p>{% endfor %}
 </section>
 {% endblock %}

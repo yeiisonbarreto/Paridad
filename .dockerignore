@@ -9,3 +9,5 @@
 !static/
 !static/*.css
 !static/*.min.js
+
+!static/*.png

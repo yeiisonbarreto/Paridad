@@ -36,8 +36,8 @@
   {% endif %}
   <p><a class="button secondary" href="{{ draft }}">Preparar aviso en el correo</a></p>
 </section>
-<section class="card section-gap">
-  <h2>Código de la entrega</h2>
-  <pre tabindex="0"><code>{{ submission.source }}</code></pre>
-</section>
+<details class="card section-gap panel-disclosure" open>
+  <summary>Código de la entrega</summary>
+  <div class="disclosure-content"><pre tabindex="0"><code>{{ submission.source }}</code></pre></div>
+</details>
 {% endblock %}
