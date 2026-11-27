@@ -1,0 +1,18 @@
+{% macro notice_title(notice) %}{{ 'Revisa esta entrega' if notice.submission_id else 'Revisa tus entregas' }}{% endmacro %}
+
+{% macro notice_content(notice, heading_id) %}
+<h2 id="{{ heading_id }}" tabindex="-1">{{ notice_title(notice) }}</h2>
+<time class="table-detail">{{ notice.created_at|date_label }}</time>
+{% if notice.submission_id %}
+  <p class="table-detail">{{ notice.filename }} · {{ notice.activity }}</p>
+  {% if notice.similarity and notice.ai %}
+  <p>La similitud y el indicio de IA sin declarar superaron sus umbrales de revisión.</p>
+  {% elif notice.similarity %}
+  <p>La similitud superó el umbral de revisión.</p>
+  {% else %}
+  <p>El indicio de IA sin declarar superó el umbral de revisión.</p>
+  {% endif %}
+{% else %}
+  <p>El equipo docente te invita a revisar el resultado de tus entregas.</p>
+{% endif %}
+{% endmacro %}

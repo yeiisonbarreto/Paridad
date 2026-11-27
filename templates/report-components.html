@@ -36,7 +36,8 @@
   <a href="/admin/submissions/{{ item.id }}" aria-label="Ver {{ item.filename }}">Ver</a>
   <a href="/admin/submissions/{{ item.id }}/descargar" aria-label="Descargar {{ item.filename }}">Descargar</a>
   <a href="/admin/submissions/{{ item.id }}/eliminar" class="text-danger" aria-label="Eliminar {{ item.filename }}">Eliminar</a>
-  <form action="/admin/avisos" method="post">
+  <form action="/admin/avisos" method="post" data-notice-send>
+    <input type="hidden" name="preview" value="true">
     <input type="hidden" name="csrf" value="{{ user.csrf }}">
     <input type="hidden" name="selection" value="{{ item.id }}">
     <input type="hidden" name="destination" value="submissions">

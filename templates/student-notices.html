@@ -1,5 +1,6 @@
 {% extends "base.html" %}
 {% from "macros.html" import csrf, pagination %}
+{% from "notice-components.html" import notice_title, notice_content %}
 {% block title %}Avisos · Paridad{% endblock %}
 {% block content %}
 <div class="page-heading">
@@ -7,46 +8,24 @@
   <h1>Avisos</h1>
 </div>
 <section class="card notice-inbox" id="notice-inbox" aria-label="Bandeja de avisos">
-  {% if user.unread_notices %}
-  <form class="notice-inbox-tools" action="/student/avisos/leer" method="post">
-    {{ csrf(user) }}
-    <input type="hidden" name="page" value="{{ page }}">
-    <button type="submit" class="button secondary compact-button">Marcar todos como leídos</button>
-  </form>
-  {% endif %}
   {% if notices %}
   <ul class="notice-list">
     {% for notice in notices %}
     <li class="notice-entry{% if not notice.read_at %} notice-unread{% endif %}">
-      <div class="notice-heading">
-        <h2>{{ 'Revisa esta entrega' if notice.submission_id else 'Revisa tus entregas' }}</h2>
-        {% if not notice.read_at %}<span class="tag pending">Nuevo</span>{% endif %}
-      </div>
-      {% if notice.submission_id %}
-        <p class="table-detail">{{ notice.filename }} · {{ notice.activity }}</p>
-        {% if notice.similarity and notice.ai %}
-        <p>La similitud y el indicio de IA sin declarar superaron sus umbrales de revisión.</p>
-        {% elif notice.similarity %}
-        <p>La similitud superó el umbral de revisión.</p>
-        {% else %}
-        <p>El indicio de IA sin declarar superó el umbral de revisión.</p>
-        {% endif %}
-      {% else %}
-        <p>El equipo docente te invita a revisar el resultado de tus entregas.</p>
-      {% endif %}
-      <div class="notice-entry-tools">
-        <time class="table-detail">{{ notice.created_at|date_label }}</time>
-        {% if notice.submission_id %}<a href="/student/submissions/{{ notice.submission_id }}/nota">Ver entrega</a>
-        {% else %}<a href="/student">Ver mis entregas</a>{% endif %}
-        {% if not notice.read_at %}
-        <form action="/student/avisos/leer" method="post">
-          {{ csrf(user) }}
-          <input type="hidden" name="notice_id" value="{{ notice.id }}">
-          <input type="hidden" name="page" value="{{ page }}">
-          <button type="submit" class="button secondary compact-button">Marcar como leído</button>
-        </form>
-        {% endif %}
-      </div>
+      <form action="/student/avisos/leer" method="post" data-notice-open{% if not notice.read_at %} data-unread{% endif %}>
+        {{ csrf(user) }}
+        <input type="hidden" name="notice_id" value="{{ notice.id }}">
+        <input type="hidden" name="page" value="{{ page }}">
+        <input type="hidden" name="abrir" value="true">
+        <button type="submit" class="notice-row" aria-haspopup="dialog">
+          <span class="notice-row-details">
+            <span class="notice-heading">{{ notice_title(notice) }}{% if not notice.read_at %}<span class="tag pending" data-notice-new>Nuevo</span>{% endif %}</span>
+            {% if notice.submission_id %}<span class="table-detail">{{ notice.filename }} · {{ notice.activity }}</span>{% endif %}
+          </span>
+          <time class="table-detail">{{ notice.created_at|date_label }}</time>
+        </button>
+        <template>{{ notice_content(notice, 'student-notice-title') }}</template>
+      </form>
     </li>
     {% endfor %}
   </ul>
@@ -55,4 +34,13 @@
   {% endif %}
   {{ pagination('/student/avisos', page, has_next) }}
 </section>
+<dialog class="notice-dialog" id="student-notice-dialog" aria-labelledby="student-notice-title">
+  <div class="notice-dialog-inner">
+    <form method="dialog" class="notice-dialog-dismiss">
+      <button type="submit" class="notice-close" aria-label="Cerrar aviso">×</button>
+    </form>
+    <div data-notice-content></div>
+    <p class="muted" data-notice-read-error role="status" hidden></p>
+  </div>
+</dialog>
 {% endblock %}

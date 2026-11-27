@@ -6,7 +6,7 @@ from urllib.parse import quote
 from uuid import UUID
 
 from fastapi import APIRouter, Form, HTTPException, Query, Request
-from starlette.responses import Response, StreamingResponse
+from starlette.responses import JSONResponse, Response, StreamingResponse
 
 from .admin import ContextQuery, Csrf, PAGE_SIZE, Page, administrator
 from .bulk import consume_deletion, deletion_preview
@@ -16,7 +16,7 @@ from .notices import publish_manual
 from .report_excel import MAX_SHEET_ROWS, XLSX_MEDIA_TYPE, Percentage, report_excel
 from .similarity_groups import similarity_groups
 from .submission_records import delete_submissions, lock_submission_scopes
-from .web import redirect, view
+from .web import redirect, view, wants_json
 
 router = APIRouter(prefix="/admin")
 
@@ -267,6 +267,7 @@ def send_review_notices(
     activity_id: Annotated[str, Form(max_length=19)] = "",
     language_id: Annotated[str, Form(max_length=19)] = "", alerts_only: Annotated[bool, Form()] = False,
     destination: Annotated[Literal["reports", "submissions"], Form()] = "reports",
+    preview: Annotated[bool, Form()] = False,
 ):
     with request.app.state.pool.connection() as conn:
         user = administrator(conn, request, csrf)
@@ -283,8 +284,15 @@ def send_review_notices(
         if ids is not None and len(rows) != len(ids):
             raise HTTPException(409, "La selección cambió. Vuelve a seleccionar los archivos.")
         students = sorted({row["student_id"] for row in rows})
+        if preview:
+            return view(request, "notices-confirm.html", user=user, total=len(students),
+                        destination=destination, selection=ids or [], all_results=all_results,
+                        activity_id=activity_id, language_id=language_id, alerts_only=alerts_only)
         published = publish_manual(conn, students)
-    return view(request, "notices-result.html", user=user, published=published, skipped=len(students) - published,
+    skipped = len(students) - published
+    if wants_json(request):
+        return JSONResponse({"published": published, "skipped": skipped})
+    return view(request, "notices-result.html", user=user, published=published, skipped=skipped,
                 destination="/admin/" + destination)
 
 

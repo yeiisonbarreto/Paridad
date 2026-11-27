@@ -1,0 +1,20 @@
+{% extends "base.html" %}
+{% from "macros.html" import csrf %}
+{% block title %}Confirmar aviso · Paridad{% endblock %}
+{% block content %}
+<section class="card narrow">
+  <h1>¿Enviar aviso?</h1>
+  <p>El mensaje aparecerá en la bandeja de {{ total }} {{ 'estudiante' if total == 1 else 'estudiantes' }}.</p>
+  <form action="/admin/avisos" method="post" class="notice-dialog-actions">
+    {{ csrf(user) }}
+    <input type="hidden" name="destination" value="{{ destination }}">
+    <input type="hidden" name="activity_id" value="{{ activity_id }}">
+    <input type="hidden" name="language_id" value="{{ language_id }}">
+    {% if alerts_only %}<input type="hidden" name="alerts_only" value="true">{% endif %}
+    {% if all_results %}<input type="hidden" name="all_results" value="true">{% endif %}
+    {% for id in selection %}<input type="hidden" name="selection" value="{{ id }}">{% endfor %}
+    <a class="button secondary" href="/admin/{{ destination }}">Cancelar</a>
+    <button type="submit" class="button">Confirmar envío</button>
+  </form>
+</section>
+{% endblock %}

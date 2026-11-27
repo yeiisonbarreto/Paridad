@@ -1,0 +1,9 @@
+{% extends "base.html" %}
+{% from "notice-components.html" import notice_content %}
+{% block title %}Aviso · Paridad{% endblock %}
+{% block content %}
+<section class="card narrow">
+  {{ notice_content(notice, 'student-notice-title') }}
+  <p><a href="/student/avisos?page={{ page }}">Volver a avisos</a></p>
+</section>
+{% endblock %}

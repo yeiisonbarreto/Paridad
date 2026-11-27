@@ -61,7 +61,7 @@ Cada estudiante puede tener hasta tres archivos en total. El administrador puede
 
 El estudiante consulta el desglose desde su historial y puede solicitar una aclaración por archivo. En **Aclaraciones**, en el menú superior, el administrador puede responder, resolver o rechazar la solicitud y ajustar la nota. El Excel distingue la nota automática, la docente y la final.
 
-En **Informes → Entregas** puedes seleccionar archivos y pulsar **Enviar aviso** para publicar un mensaje por estudiante. En **Archivos**, el menú **Acciones** permite publicar un aviso individual. Los estudiantes consultan los avisos automáticos y manuales en **Avisos** y pueden marcarlos como leídos.
+En **Informes → Entregas** puedes seleccionar archivos y pulsar **Enviar aviso** para publicar un mensaje por estudiante. En **Archivos**, el menú **Acciones** permite publicar un aviso individual. Los estudiantes abren cada mensaje en **Avisos** y Paridad lo marca como leído.
 
 ## Estructura
 

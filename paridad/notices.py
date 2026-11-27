@@ -4,13 +4,21 @@ from typing import Annotated
 from uuid import UUID
 
 from fastapi import APIRouter, Form, HTTPException, Request
+from starlette.responses import JSONResponse
 
 from .admin import Csrf, PAGE_SIZE, Page
 from .security import auth_user, check_csrf
-from .web import redirect, view
+from .web import redirect, view, wants_json
 
 router = APIRouter(prefix="/student/avisos")
 InboxPage = Annotated[int, Form(ge=1, le=10000)]
+OWN_NOTICES = """
+    SELECT n.id, n.submission_id, n.similarity, n.ai, n.created_at, n.read_at,
+           s.filename, a.code AS activity
+    FROM review_notices n LEFT JOIN submissions s ON s.id = n.submission_id
+    LEFT JOIN activities a ON a.id = s.activity_id
+    WHERE n.student_id = %s
+"""
 
 
 def publish_automatic(conn) -> None:
@@ -58,11 +66,7 @@ def inbox(request: Request, page: Page = 1):
     with request.app.state.pool.connection() as conn:
         user = auth_user(conn, request, "STUDENT")
         notices = conn.execute(
-            """SELECT n.id, n.submission_id, n.similarity, n.ai, n.created_at, n.read_at,
-                      s.filename, a.code AS activity
-               FROM review_notices n LEFT JOIN submissions s ON s.id = n.submission_id
-               LEFT JOIN activities a ON a.id = s.activity_id
-               WHERE n.student_id = %s ORDER BY n.created_at DESC, n.id DESC LIMIT %s OFFSET %s""",
+            OWN_NOTICES + " ORDER BY n.created_at DESC, n.id DESC LIMIT %s OFFSET %s",
             (user["id"], PAGE_SIZE + 1, (page - 1) * PAGE_SIZE),
         ).fetchall()
     return view(request, "student-notices.html", user=user, notices=notices[:PAGE_SIZE],
@@ -70,22 +74,28 @@ def inbox(request: Request, page: Page = 1):
 
 
 @router.post("/leer")
-def read_notices(request: Request, csrf: Csrf, notice_id: Annotated[UUID | None, Form()] = None,
-                 page: InboxPage = 1):
+def read_notice(
+    request: Request, csrf: Csrf, notice_id: Annotated[UUID, Form()],
+    page: InboxPage = 1, abrir: Annotated[bool, Form()] = False,
+):
     with request.app.state.pool.connection() as conn:
         user = auth_user(conn, request, "STUDENT")
         check_csrf(user["csrf"], csrf)
-        if notice_id is None:
-            conn.execute(
-                "UPDATE review_notices SET read_at = now() WHERE student_id = %s AND read_at IS NULL",
-                (user["id"],),
-            )
-        else:
-            updated = conn.execute(
-                """UPDATE review_notices SET read_at = COALESCE(read_at, now())
-                   WHERE id = %s AND student_id = %s RETURNING id""",
-                (notice_id, user["id"]),
-            ).fetchone()
-            if not updated:
-                raise HTTPException(404, "Aviso no encontrado.")
+        updated = conn.execute(
+            """UPDATE review_notices SET read_at = COALESCE(read_at, now())
+               WHERE id = %s AND student_id = %s RETURNING id""",
+            (notice_id, user["id"]),
+        ).fetchone()
+        if not updated:
+            raise HTTPException(404, "Aviso no encontrado.")
+        unread = conn.execute(
+            "SELECT count(*) AS unread FROM review_notices WHERE student_id = %s AND read_at IS NULL",
+            (user["id"],),
+        ).fetchone()["unread"]
+        if wants_json(request):
+            return JSONResponse({"unread": unread})
+        if abrir:
+            notice = conn.execute(OWN_NOTICES + " AND n.id = %s", (user["id"], notice_id)).fetchone()
+            user["unread_notices"] = unread
+            return view(request, "student-notice.html", user=user, notice=notice, page=page)
     return redirect(f"/student/avisos?page={page}")

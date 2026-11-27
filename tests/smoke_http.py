@@ -251,23 +251,37 @@ def main():
         read_path = "/student/avisos/leer"
         post(second, read_path, second_csrf, 404, notice_id=notice_id)
         post(first, read_path, "token-inválido", 403, notice_id=notice_id)
-        post(first, read_path, first_csrf, notice_id=notice_id)
-        assert notice_id not in assert_status(first.get("/student/avisos")).text
+        reading = first.post(read_path, data={"csrf": first_csrf, "notice_id": notice_id},
+                             headers={"Accept": "application/json"})
+        unread = assert_status(reading).json()["unread"]
+        assert notice_id in assert_status(first.get("/student/avisos")).text
+        reading_again = first.post(read_path, data={"csrf": first_csrf, "notice_id": notice_id},
+                                   headers={"Accept": "application/json"})
+        assert assert_status(reading_again).json()["unread"] == unread
 
         selection = [graded["id"], second_row["id"],
                      wait_result(first, "mismo-estudiante.c")["id"]]
         post(first, "/admin/avisos", first_csrf, 403, selection=selection)
-        sent = post(admin, "/admin/avisos", admin_csrf, 200, selection=selection,
-                    activity_id=activity_id, language_id=c_id)
-        assert "2 avisos publicados" in sent.text
+        preview = post(admin, "/admin/avisos", admin_csrf, 200, selection=selection, preview="true")
+        assert "Confirmar envío" in preview.text
+        assert "Revisa tus entregas" not in assert_status(first.get("/student/avisos")).text
+        sent = admin.post("/admin/avisos", data={
+            "csrf": admin_csrf, "selection": selection, "activity_id": activity_id, "language_id": c_id,
+        }, headers={"Accept": "application/json"})
+        assert assert_status(sent).json() == {"published": 2, "skipped": 0}
         repeated = post(admin, "/admin/avisos", admin_csrf, 200, selection=selection)
         assert "0 avisos publicados" in repeated.text
         assert "Revisa tus entregas" in assert_status(first.get("/student/avisos")).text
         assert "Revisa tus entregas" in assert_status(second.get("/student/avisos")).text
-        post(first, read_path, first_csrf)
+        assert_status(first.post(read_path, data={"csrf": first_csrf}), 422)
+        private_ids = re.findall(r'name="notice_id" value="([^"]+)"', assert_status(first.get("/student/avisos")).text)
+        opened = post(first, read_path, first_csrf, 200, notice_id=private_ids[0], abrir="true")
+        assert "El equipo docente te invita" in opened.text
+        for private_id in private_ids[1:]:
+            post(first, read_path, first_csrf, notice_id=private_id)
         read_inbox = assert_status(first.get("/student/avisos")).text
-        assert 'class="notice-count"' not in read_inbox and "Revisa tus entregas" in read_inbox
-        assert 'class="notice-count"' in assert_status(second.get("/student")).text
+        assert 'class="notice-count" hidden' in read_inbox and "Revisa tus entregas" in read_inbox
+        assert 'class="notice-count" hidden' not in assert_status(second.get("/student")).text
 
         selected = post(admin, "/admin/reports/exportar", admin_csrf, 200, selection=graded["id"], **filters)
         workbook = load_workbook(BytesIO(selected.content))

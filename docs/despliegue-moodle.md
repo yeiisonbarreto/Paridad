@@ -24,9 +24,9 @@ El perfil TLS publica HTTPS. Coordina la emisión y renovación de certificados 
 
 ## Avisos y acceso de los estudiantes
 
-**Avisos** muestra al estudiante sus mensajes y el contador de pendientes de lectura. Paridad publica un aviso cuando una entrega supera el umbral de similitud o de indicio de IA sin declarar. El trabajador revisa también las entregas anteriores y registra cada tipo de alerta una vez por archivo. Los avisos propios se actualizan aproximadamente cada diez segundos con la página abierta.
+**Avisos** muestra al estudiante sus mensajes y el contador de pendientes de lectura. Al abrir un mensaje en la ventana flotante, Paridad lo marca como leído. Paridad publica un aviso cuando una entrega supera el umbral de similitud o de indicio de IA sin declarar. El trabajador revisa también las entregas anteriores y registra cada tipo de alerta una vez por archivo. Los avisos propios se actualizan aproximadamente cada diez segundos con la página abierta.
 
-En **Informes**, selecciona entregas y pulsa **Enviar aviso** para publicar un mensaje por estudiante. El menú **Acciones** de Archivos permite hacerlo para uno solo. Paridad omite las cuentas inactivas y evita publicar avisos manuales repetidos al mismo estudiante en un minuto. La migración conserva los avisos anteriores en la bandeja, inicialmente como pendientes de lectura.
+En **Informes**, selecciona entregas y pulsa **Enviar aviso** y confirma para publicar un mensaje por estudiante. La confirmación aparece en la misma página. El menú **Acciones** de Archivos permite hacerlo para uno solo. Paridad omite las cuentas inactivas y evita publicar avisos manuales repetidos al mismo estudiante en un minuto. La migración conserva los avisos anteriores en la bandeja, inicialmente como pendientes de lectura. Los sonidos de envío y recepción se activan al interactuar con la página y dependen de la configuración de audio del navegador.
 
 En **Cuentas**, abre una cuenta activa y usa **Generar enlace de invitación** para obtener un enlace personal que caduca en 24 horas. Generar otro enlace invalida el anterior. Usarlo, cambiar el correo, restablecer la contraseña o inhabilitar la cuenta también lo invalida.
 

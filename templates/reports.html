@@ -17,8 +17,9 @@
   <h2 id="deliveries-heading">Entregas</h2>
   {% if submissions %}
   <div class="report-toolbar">
-    <form action="/admin/avisos" method="post" id="report-selection" class="bulk-toolbar report-selection" data-bulk-selection>
+    <form action="/admin/avisos" method="post" id="report-selection" class="bulk-toolbar report-selection" data-bulk-selection data-notice-send>
       {{ csrf(user) }}
+      <input type="hidden" name="preview" value="true">
       <input type="hidden" name="activity_id" value="{{ selected_activity or '' }}">
       <input type="hidden" name="language_id" value="{{ selected_language or '' }}">
       {% if alerts_only %}<input type="hidden" name="alerts_only" value="true">{% endif %}

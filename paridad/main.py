@@ -18,7 +18,7 @@ from .security import (
     USERNAME, auth_user, check_csrf, check_rate, clear_cookie, delete_current_session,
     issue_login_challenge, normalized_username, password_session, source_ip, valid_password, verify_password,
 )
-from .web import HTTPControls, redirect, view
+from .web import HTTPControls, redirect, view, wants_json
 
 
 @asynccontextmanager
@@ -44,7 +44,7 @@ app.include_router(invitations.router)
 
 @app.exception_handler(HTTPException)
 def http_error(request: Request, exc: HTTPException):
-    if request.url.path.startswith("/api/"):
+    if request.url.path.startswith("/api/") or wants_json(request):
         return JSONResponse({"detail": str(exc.detail)}, exc.status_code, headers=exc.headers)
     if exc.status_code == 401:
         return redirect("/login")

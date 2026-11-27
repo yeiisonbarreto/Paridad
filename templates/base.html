@@ -8,6 +8,9 @@
   <title>{% block title %}Paridad{% endblock %}</title>
   <link rel="stylesheet" href="/static/paridad.css">
   <script src="/static/navigation.min.js" defer></script>
+  {% if user and (user.role == 'STUDENT' or request.url.path in ['/admin/reports', '/admin/submissions']) %}
+  <script src="/static/notices-ui.min.js" defer></script>
+  {% endif %}
   {% if user and user.role == 'STUDENT' %}<script src="/static/student.min.js" defer></script>{% endif %}
   {% block head %}{% endblock %}
 </head>
@@ -38,7 +41,7 @@
       {% elif user and user.role == 'STUDENT' %}
       <nav class="student-nav" aria-label="Estudiante">
         <a href="/student/avisos" class="student-notice-link"{% if request.url.path == '/student/avisos' %} aria-current="page"{% endif %}>
-          Avisos<span id="student-notice-count" aria-live="polite">{% if user.unread_notices %}<span class="notice-count"><span class="screen-reader-only"> sin leer </span>{{ user.unread_notices }}</span>{% endif %}</span>
+          Avisos<span id="student-notice-count" aria-live="polite" data-newest="{{ user.newest_notice or 0 }}"><span class="notice-count"{% if not user.unread_notices %} hidden{% endif %}><span class="screen-reader-only"> sin leer </span><span data-unread-count>{{ user.unread_notices }}</span></span></span>
         </a>
       </nav>
       {% endif %}
@@ -64,6 +67,19 @@
     </div>
   </header>
   <main class="shell content" id="main">{% block content %}{% endblock %}</main>
+  {% if user and user.role == 'ADMIN' and request.url.path in ['/admin/reports', '/admin/submissions'] %}
+  <dialog class="notice-dialog" id="send-notice-dialog" aria-labelledby="send-notice-title">
+    <form method="dialog" class="notice-dialog-inner stack">
+      <h2 id="send-notice-title">¿Enviar aviso?</h2>
+      <p>El mensaje aparecerá en la bandeja de los estudiantes seleccionados.</p>
+      <div class="notice-dialog-actions">
+        <button type="submit" value="cancel" class="button secondary" autofocus>Cancelar</button>
+        <button type="submit" value="send" class="button">Confirmar envío</button>
+      </div>
+    </form>
+  </dialog>
+  <div id="notice-toast" class="notice-toast" role="status" aria-live="polite"></div>
+  {% endif %}
   {% block footer %}
   <footer class="site-footer">
     <div class="shell footer-row">

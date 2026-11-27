@@ -28,6 +28,10 @@ def view(request: Request, template: str, *, status: int = 200, **context):
     return templates.TemplateResponse(request, template, context, status_code=status)
 
 
+def wants_json(request: Request) -> bool:
+    return request.headers.get("accept") == "application/json"
+
+
 def redirect(path: str):
     return RedirectResponse(path, status_code=303)
 
