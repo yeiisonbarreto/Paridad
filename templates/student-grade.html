@@ -14,21 +14,18 @@
     {{ grade_breakdown(grade) }}
   </section>
   {% if grade.clarification_status or grade.automatic_grade is not none or grade.grade_override is not none %}
-  <section class="card">
-    <h2>Aclaración</h2>
+  <section class="card clarification-card" id="aclaracion">
+    <h2>{{ 'Aclaración' if grade.clarification_status else 'Pedir aclaración' }}</h2>
     {% if grade.clarification_status %}
       {{ clarification_content(grade) }}
     {% else %}
       <form class="stack" action="/student/submissions/{{ grade.id }}/aclaracion" method="post">
         {{ csrf(user) }}
-        <label>¿Por qué no estás de acuerdo con la nota?
-          <textarea name="reason" rows="3" maxlength="600" required></textarea>
-        </label>
-        <label>Otros comentarios (opcional)
-          <textarea name="comments" rows="3" maxlength="800"></textarea>
-        </label>
-        <p class="field-help">Una solicitud por archivo.</p>
-        <button class="button" type="submit">Pedir aclaración</button>
+        <label for="clarification-reason">Motivo de la solicitud</label>
+        <textarea id="clarification-reason" name="reason" rows="5" maxlength="600" required
+                  aria-describedby="clarification-help" placeholder="Cuéntanos qué parte de la nota quieres que revisemos."></textarea>
+        <p class="field-help" id="clarification-help">Una solicitud por archivo · hasta 600 caracteres.</p>
+        <button class="button" type="submit">Enviar aclaración</button>
       </form>
     {% endif %}
   </section>

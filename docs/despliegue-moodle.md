@@ -29,13 +29,15 @@ Configura un servidor SMTP con STARTTLS accesible desde la aplicación y el trab
 ```dotenv
 PARIDAD_SMTP_HOST=smtp.tu-universidad.edu
 PARIDAD_SMTP_PORT=587
-PARIDAD_NOTICE_FROM=docente@tu-universidad.edu
+PARIDAD_NOTICE_FROM=notificaciones@tu-dominio.edu
 PARIDAD_SMTP_FROM=notificaciones@tu-universidad.edu
 PARIDAD_SMTP_USERNAME=
 PARIDAD_SMTP_PASSWORD=
 ```
 
-Recrea los servicios después de guardar el archivo. `PARIDAD_NOTICE_FROM` activa los avisos de revisión junto con `PARIDAD_SMTP_HOST`. El trabajador envía un correo a la dirección registrada en la cuenta cuando una entrega supera el umbral de similitud o de indicio de IA sin declarar. También revisa los umbrales de entregas ya analizadas, incluidas las anteriores al arranque. Cada tipo de alerta se pone en cola una sola vez por archivo. **Informes → Avisos** permite enviar correos manualmente, uno por destinatario aunque tenga varios archivos seleccionados. El trabajador reintenta errores de SMTP y registra los avisos fallidos.
+Recrea los servicios después de guardar el archivo. `PARIDAD_NOTICE_FROM` activa los avisos de revisión junto con `PARIDAD_SMTP_HOST`. El trabajador envía un correo a la dirección registrada en la cuenta cuando una entrega supera el umbral de similitud o de indicio de IA sin declarar. También revisa los umbrales de entregas ya analizadas, incluidas las anteriores al arranque. Cada tipo de alerta se pone en cola una sola vez por archivo. **Enviar aviso** en Informes permite enviar correos manualmente, uno por destinatario aunque tenga varios archivos seleccionados. El trabajador reintenta errores de SMTP y registra los avisos fallidos.
+
+Puedes usar una dirección exclusiva de salida como `notificaciones@tu-dominio.edu`. Verifica que el dominio sea tuyo o que tengas permiso para usarlo y autoriza la dirección en el proveedor SMTP. El proveedor se encarga de la entrega y la política de correo entrante. Para excluir respuestas, configura el rechazo de correo entrante para esa dirección. Los avisos llevan un pie que indica que son automáticos, una versión de texto y el logotipo de Paridad incrustado si la imagen está disponible en `static/paridad-logo.png`. Docker puede incorporar el PNG original desde la carpeta del proyecto durante la compilación.
 
 `PARIDAD_SMTP_FROM` se usa para las invitaciones de contraseña. En **Cuentas**, guarda un correo válido para el estudiante y comprueba que su cuenta esté activa. Solo se envía un mensaje cuando el administrador pulsa **Enviar invitación por correo**. Los enlaces usan `PUBLIC_URL`, caducan en 24 horas y se invalidan al usar, reenviar, cambiar el correo, restablecer la contraseña desde administración o inhabilitar la cuenta.
 

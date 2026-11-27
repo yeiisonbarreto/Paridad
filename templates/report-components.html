@@ -24,30 +24,29 @@
     {% endif %}
     <div class="filter-actions">
       <button class="button" type="submit">Filtrar</button>
-      {% if reports %}<button class="button secondary" type="submit" formaction="/admin/reports/exportar">Descargar Excel</button>{% endif %}
     </div>
   </form>
 {% if reports %}</section>{% else %}</details>{% endif %}
 {% endmacro %}
 
-{% macro file_actions(item, user, mail_ready, include_view=true, destination='reports') %}
+{% macro file_actions(item, user, mail_ready) %}
 <details class="file-menu" data-dropdown>
   <summary aria-label="Acciones de {{ item.filename }}">Acciones</summary>
 <div class="file-actions">
-  {% if include_view %}<a href="/admin/submissions/{{ item.id }}" aria-label="Ver {{ item.filename }}">Ver</a>{% endif %}
+  <a href="/admin/submissions/{{ item.id }}" aria-label="Ver {{ item.filename }}">Ver</a>
   <a href="/admin/submissions/{{ item.id }}/descargar" aria-label="Descargar {{ item.filename }}">Descargar</a>
   <a href="/admin/submissions/{{ item.id }}/eliminar" class="text-danger" aria-label="Eliminar {{ item.filename }}">Eliminar</a>
   <form action="/admin/avisos" method="post">
     <input type="hidden" name="csrf" value="{{ user.csrf }}">
     <input type="hidden" name="selection" value="{{ item.id }}">
-    <input type="hidden" name="destination" value="{{ destination }}">
+    <input type="hidden" name="destination" value="submissions">
     <button type="submit" class="file-action-button"{% if not mail_ready %} disabled title="Configura SMTP y el remitente para enviar avisos"{% endif %}>Enviar aviso</button>
   </form>
 </div>
 </details>
 {% endmacro %}
 
-{% macro submission_table(submissions, user, mail_ready, grouped=false, selection_form=none, destination='reports') %}
+{% macro submission_table(submissions, user, mail_ready, grouped=false, selection_form=none, archive=false) %}
 {% if submissions %}
 <div class="table-wrap" tabindex="0" role="region" aria-label="{{ 'Archivos del grupo' if grouped else 'Archivos' }}">
 <table>
@@ -56,10 +55,11 @@
       {% if selection_form %}<th scope="col" class="selection-column"><span class="screen-reader-only">Seleccionar</span></th>{% endif %}
       <th scope="col">Archivo</th>
       <th scope="col">Estudiante</th>
-      {% if grouped %}<th scope="col">Similitud máxima</th>{% else %}<th scope="col">Actividad y lenguaje</th>{% endif %}
+      {% if not grouped %}<th scope="col">Actividad y lenguaje</th>{% endif %}
+      {% if not archive %}<th scope="col">Similitud</th>{% endif %}
       <th scope="col">Indicio de IA</th>
       <th scope="col">Nota</th>
-      <th scope="col">Acciones</th>
+      <th scope="col">{{ "Acciones" if archive else "Detalle" }}</th>
     </tr>
   </thead>
   <tbody>
@@ -71,8 +71,15 @@
       {% endif %}
       <td>{{ item.filename }}</td>
       <td>{{ item.display_name }}<span class="table-detail">{{ item.username }}</span></td>
-      {% if grouped %}<td class="numeric">{{ item.group_score|percent }}</td>
-      {% else %}<td>{{ item.code }}<span class="table-detail">{{ item.language }}</span></td>{% endif %}
+      {% if not grouped %}<td>{{ item.code }}<span class="table-detail">{{ item.language }}</span></td>{% endif %}
+      {% if not archive %}
+      <td class="numeric">
+        {% if item.state == 'completed' %}
+          {% set score = item.group_score if grouped else item.max_similarity_bp %}
+          {{ score|percent }}{% if score > 100 * item.similarity_threshold %}<span class="tag alert">Revisión</span>{% endif %}
+        {% else %}—{% endif %}
+      </td>
+      {% endif %}
       <td class="numeric">
         {% if item.state == 'completed' %}{{ item.ai_bp|percent }}
           {% if item.declared %}<span class="tag">Declarada</span>{% endif %}
@@ -81,7 +88,10 @@
         {% else %}<span class="tag alert">Análisis fallido</span>{% endif %}
       </td>
       <td class="numeric">{{ (item.grade ~ ' / 50') if item.grade is not none else '—' }}</td>
-      <td>{{ file_actions(item, user, mail_ready, destination=destination) }}</td>
+      <td>
+        {% if archive %}{{ file_actions(item, user, mail_ready) }}
+        {% else %}<a class="button secondary compact-button" href="/admin/submissions/{{ item.id }}?origen=informes" aria-label="Ver {{ item.filename }}">Ver</a>{% endif %}
+      </td>
     </tr>
     {% endfor %}
   </tbody>

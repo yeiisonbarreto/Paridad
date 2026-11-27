@@ -4,11 +4,15 @@ import logging
 import os
 from email.message import EmailMessage
 
-from .config import PUBLIC_ORIGIN, SECURE_COOKIES
+from .config import BASE_DIR, PUBLIC_ORIGIN, SECURE_COOKIES
 from .mailer import send_email, smtp_configured
 from .security import normalized_email
+from .web import templates
 
 LOGGER = logging.getLogger("paridad.notices")
+NOTICE_LOGO = BASE_DIR / "static" / "paridad-logo.png"
+
+
 def notices_enabled():
     return bool(smtp_configured() and os.getenv("PARIDAD_NOTICE_FROM", "").strip())
 
@@ -64,6 +68,8 @@ def notice_message(job):
     message["To"] = job["email"]
     message["Message-ID"] = f"<paridad-{job['id']}@{domain}>"
     message["Subject"] = "Revisa tu trabajo en Paridad"
+    message["Auto-Submitted"] = "auto-generated"
+    message["X-Auto-Response-Suppress"] = "All"
     if job["submission_id"]:
         reasons = []
         if job["similarity"]:
@@ -78,11 +84,27 @@ def notice_message(job):
         )
     else:
         detail = "Te invitamos a revisar el resultado de tus entregas y tu trabajo en Paridad.\n"
-    link = f"Consulta tus entregas en {PUBLIC_ORIGIN}/student.\n" if SECURE_COOKIES else "Ingresa a Paridad para ver el resultado.\n"
+    url = f"{PUBLIC_ORIGIN}/student" if SECURE_COOKIES else None
+    link = f"Consulta tus entregas en {url}" if url else "Ingresa a Paridad para ver el resultado."
+    footer = "Este correo se generó automáticamente desde Paridad. No se admiten respuestas a esta dirección."
     message.set_content(
-        f"Hola, {job['display_name']}:\n\n{detail}\n{link}\n"
-        "Cordialmente,\nParidad\n\nEste correo se generó automáticamente desde Paridad.\n"
+        f"Hola, {job['display_name']}:\n\n{detail}\n{link}\n\n"
+        f"Cordialmente,\nParidad\n\n{footer}\n"
     )
+
+    try:
+        logo = NOTICE_LOGO.read_bytes()
+    except FileNotFoundError:
+        logo = None
+    logo_id = f"paridad-logo-{job['id']}@{domain}" if logo else None
+    html = templates.get_template("notice-email.html").render(
+        name=job["display_name"], detail=detail.strip(), url=url, footer=footer, logo_id=logo_id,
+    )
+    message.add_alternative(html, subtype="html")
+    if logo:
+        message.get_payload()[-1].add_related(
+            logo, maintype="image", subtype="png", cid=f"<{logo_id}>", disposition="inline",
+        )
     return message
 
 

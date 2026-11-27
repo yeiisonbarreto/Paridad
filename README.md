@@ -18,7 +18,7 @@ docker compose run --rm migrate python -m paridad.cli create-admin docente --nam
 1. Abre <http://localhost:8787> e inicia sesión como `docente` con la contraseña que te pidió el comando.
 2. En **Cuentas**, crea dos estudiantes. Las contraseñas tienen un mínimo de 12 caracteres y solo el administrador las asigna o restablece.
 3. En **Actividades**, crea `lab01` y habilita **C**. Puedes elegir otros perfiles y definir umbrales para la actividad.
-4. En sesiones de navegador independientes, sube un archivo `.c` por estudiante. Usa un programa de varias líneas y una segunda versión con nombres y formato cambiados. Consulta **Historial** en el primer navegador e **Informes → Ver fragmentos** en administración.
+4. En sesiones de navegador independientes, sube un archivo `.c` por estudiante. Usa un programa de varias líneas y una segunda versión con nombres y formato cambiados. Consulta **Historial** en el primer navegador e **Informes → Comparaciones → Ver** en administración.
 
 En el servidor usa el perfil TLS documentado en [Despliegue y Moodle](docs/despliegue-moodle.md). Si cambias el puerto local, cambia `PARIDAD_HTTP_PORT` y `PUBLIC_URL` para que ambos coincidan.
 
@@ -53,15 +53,15 @@ Desde el menú de la cuenta, abre **Mi cuenta**. Para cambiar el usuario o la co
 
 En **Archivos**, abre **Acciones** para ver, descargar o eliminar una entrega. Marca varias entregas para descargarlas en un ZIP o eliminarlas tras confirmar. **Todos los archivos del filtro** abarca todas sus páginas. Al eliminar una entrega también se eliminan sus comparaciones. El historial de los estudiantes afectados se recalcula. Paridad guarda los bytes originales de las nuevas entregas. Las entregas anteriores a esta actualización se descargan como texto UTF-8 a partir del código almacenado.
 
-En **Informes**, **Descargar Excel** aplica los filtros de actividad, lenguaje y alertas a todas las páginas. El libro incluye las comparaciones entre pares y los resultados de cada entrega, con porcentajes y umbrales. Los grupos reúnen archivos de la misma actividad y lenguaje conectados por coincidencias que superan el umbral. Los grupos más similares aparecen primero. Abre **Comparaciones individuales** para ver los fragmentos de cada par.
+En **Informes**, **Descargar Excel** está al lado de la selección. Si marcas archivos, el libro incluye esas entregas y sus comparaciones. Si dejas la selección vacía o marcas **Todos los archivos del filtro**, incluye todas las páginas de los filtros activos. Desde **Comparaciones**, abre **Ver** para revisar ambos archivos con las líneas coincidentes resaltadas. Los grupos reúnen archivos de la misma actividad y lenguaje conectados por coincidencias por encima del umbral.
 
 ## Notas, avisos y aclaraciones
 
 Cada estudiante puede tener hasta tres archivos en total. El administrador puede liberar cupo eliminando una entrega. Los archivos históricos se conservan. La nota automática combina estructura (15 puntos), buenas prácticas y nombres legibles (10), comentarios en inglés (10) y similitud (15). El criterio de inglés usa una heurística de vocabulario y asigna cero si faltan comentarios. La similitud reduce progresivamente sus puntos a medida que aumenta el porcentaje. Los indicios de IA se usan para avisos de revisión. El análisis estático evalúa el texto y la estructura del archivo sin ejecutar el programa.
 
-El estudiante consulta el desglose desde su historial y puede solicitar una aclaración por archivo. En **Informes → Aclaraciones**, el administrador puede responder, resolver o rechazar la solicitud y ajustar la nota. El Excel distingue la nota automática, la docente y la final.
+El estudiante consulta el desglose desde su historial y puede solicitar una aclaración por archivo. En **Aclaraciones**, en el menú superior, el administrador puede responder, resolver o rechazar la solicitud y ajustar la nota. El Excel distingue la nota automática, la docente y la final.
 
-En **Informes → Avisos** puedes seleccionar entregas y enviar un correo por estudiante. El menú **Acciones** permite enviar un aviso individual. Para enviar avisos manuales y automáticos, configura SMTP y `PARIDAD_NOTICE_FROM` en la instalación. [Configuración de correo](docs/despliegue-moodle.md#avisos-de-revisión-e-invitaciones-por-correo)
+En **Informes → Entregas** puedes seleccionar archivos y pulsar **Enviar aviso** para enviar un correo por estudiante. En **Archivos**, el menú **Acciones** permite enviar un aviso individual. Para enviar avisos manuales y automáticos, configura SMTP y `PARIDAD_NOTICE_FROM` en la instalación. [Configuración de correo](docs/despliegue-moodle.md#avisos-de-revisión-e-invitaciones-por-correo)
 
 ## Estructura
 

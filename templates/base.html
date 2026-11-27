@@ -22,13 +22,14 @@
       {% set current = "Panel" %}
       {% if request.url.path.startswith('/admin/accounts') %}{% set current = "Cuentas" %}
       {% elif request.url.path.startswith('/admin/activities') %}{% set current = "Actividades" %}
-      {% elif request.url.path.startswith('/admin/reports') or request.url.path.startswith('/admin/aclaraciones') %}
+      {% elif request.url.path.startswith('/admin/reports') %}
         {% set current = "Informes" %}
-      {% elif request.url.path.startswith('/admin/submissions') %}{% set current = "Archivos" %}
+      {% elif request.url.path.startswith('/admin/aclaraciones') %}{% set current = "Aclaraciones" %}
+      {% elif request.url.path.startswith('/admin/submissions') %}{% set current = "Informes" if request.query_params.get('origen') == 'informes' else "Archivos" %}
       {% endif %}
       <nav class="section-nav" aria-label="Administración">
         <ul class="section-links">
-          {% for url, label in [('/admin', 'Panel'), ('/admin/accounts', 'Cuentas'), ('/admin/activities', 'Actividades'), ('/admin/reports', 'Informes'), ('/admin/submissions', 'Archivos')] %}
+          {% for url, label in [('/admin', 'Panel'), ('/admin/accounts', 'Cuentas'), ('/admin/activities', 'Actividades'), ('/admin/reports', 'Informes'), ('/admin/aclaraciones', 'Aclaraciones'), ('/admin/submissions', 'Archivos')] %}
           <li><a href="{{ url }}" {% if current == label %}aria-current="page"{% endif %}>{{ label }}</a></li>
           {% endfor %}
         </ul>

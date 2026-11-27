@@ -5,7 +5,7 @@ from typing import Annotated, Literal
 from urllib.parse import quote
 from uuid import UUID
 
-from fastapi import APIRouter, Form, HTTPException, Request
+from fastapi import APIRouter, Form, HTTPException, Query, Request
 from starlette.responses import Response, StreamingResponse
 
 from .admin import ContextQuery, Csrf, PAGE_SIZE, Page, administrator
@@ -51,6 +51,15 @@ PAIR_LIST = """
     WHERE (%s::bigint IS NULL OR a.id = %s) AND (%s::bigint IS NULL OR l.id = %s)
       AND (NOT %s OR p.score_bp > 100 * COALESCE(a.similarity_threshold, cfg.similarity_threshold))
 """
+
+# Optional selection shared by the Excel preflight and its streamed worksheets.
+EXPORT_PAIRS = PAIR_LIST + " AND (%s::uuid[] IS NULL OR p.left_id = ANY(%s) OR p.right_id = ANY(%s))"
+EXPORT_SUBMISSIONS = SUBMISSION_LIST + SUBMISSION_FILTER + " AND (%s::uuid[] IS NULL OR s.id = ANY(%s))"
+PAIR_ORDER = " ORDER BY p.score_bp DESC, p.left_id, p.right_id"
+FRAGMENT_PAGE_LINES = 60
+FRAGMENT_CONTEXT = 3
+ReportOrigin = Annotated[Literal["informes", "archivos"], Query()]
+
 
 
 def optional_context_id(value: str) -> int | None:
@@ -134,7 +143,7 @@ def reports(
         context = context_params(filters)
         groups, groups_next = group_page(conn, filters, context, page)
         pairs = conn.execute(
-            PAIR_LIST + " ORDER BY p.score_bp DESC, p.left_id, p.right_id LIMIT %s OFFSET %s",
+            PAIR_LIST + PAIR_ORDER + " LIMIT %s OFFSET %s",
             (*context, alerts_only, PAGE_SIZE + 1, (page - 1) * PAGE_SIZE),
         ).fetchall()
         submissions = submission_page(conn, context, page, alerts_only=alerts_only)
@@ -146,11 +155,11 @@ def reports(
     )
 
 
-def comparison_export_rows(conn, parameters):
+def comparison_export_rows(conn, parameters, selection):
     with conn.cursor(name="report_excel_pairs") as cursor:
         cursor.itersize = 400
-        cursor.execute(PAIR_LIST + " ORDER BY p.score_bp DESC, p.left_id, p.right_id LIMIT %s",
-                       (*parameters, MAX_SHEET_ROWS - 1))
+        cursor.execute(EXPORT_PAIRS + PAIR_ORDER + " LIMIT %s",
+                       (*parameters, selection, selection, selection, MAX_SHEET_ROWS - 1))
         for item in cursor:
             yield (
                 item["code"], item["language"], item["left_username"], item["left_name"], item["left_filename"],
@@ -160,11 +169,11 @@ def comparison_export_rows(conn, parameters):
             )
 
 
-def submission_export_rows(conn, parameters):
+def submission_export_rows(conn, parameters, selection):
     with conn.cursor(name="report_excel_submissions") as cursor:
         cursor.itersize = 400
-        cursor.execute(SUBMISSION_LIST + SUBMISSION_FILTER + " ORDER BY s.created_at DESC, s.id DESC LIMIT %s",
-                       (*parameters, MAX_SHEET_ROWS - 1))
+        cursor.execute(EXPORT_SUBMISSIONS + " ORDER BY s.created_at DESC, s.id DESC LIMIT %s",
+                       (*parameters, selection, selection, MAX_SHEET_ROWS - 1))
         for item in cursor:
             completed = item["state"] == "completed"
             yield (
@@ -178,7 +187,7 @@ def submission_export_rows(conn, parameters):
             )
 
 
-def export_workbook(pool, parameters):
+def export_workbook(pool, parameters, selection):
     with pool.connection() as conn:
         conn.execute("SET TRANSACTION ISOLATION LEVEL REPEATABLE READ")
         sheets = (
@@ -186,38 +195,58 @@ def export_workbook(pool, parameters):
                 "Comparaciones",
                 ("Actividad", "Lenguaje", "Usuario A", "Estudiante A", "Archivo A", "Usuario B", "Estudiante B",
                  "Archivo B", "Similitud", "Umbral de similitud", "Estado"),
-                comparison_export_rows(conn, parameters),
+                comparison_export_rows(conn, parameters, selection),
             ),
             (
                 "Entregas",
                 ("Actividad", "Lenguaje", "Usuario", "Estudiante", "Archivo", "Estado",
                  "Similitud máxima", "Umbral de similitud", "Indicio de IA", "Umbral de IA", "IA declarada",
                  "Crédito de IA", "Revisión de IA", "Nota automática (0–50)", "Nota docente (0–50)", "Nota final (0–50)"),
-                submission_export_rows(conn, parameters),
+                submission_export_rows(conn, parameters, selection),
             ),
         )
         yield from report_excel(sheets)
 
 
-@router.get("/reports/exportar")
-def export_reports(request: Request, activity_id: ContextQuery = "", language_id: ContextQuery = "",
-                   alerts_only: bool = False):
+def report_download(request, activity_id, language_id, alerts_only, selection=None, csrf=None):
     pool = request.app.state.pool
     with pool.connection() as conn:
-        administrator(conn, request)
+        administrator(conn, request, csrf)
         activity, language = optional_context_id(activity_id), optional_context_id(language_id)
         parameters = (activity, activity, language, language, alerts_only)
-        for query in (PAIR_LIST, SUBMISSION_LIST + SUBMISSION_FILTER):
+        for query, ids in (
+            (EXPORT_PAIRS, (selection, selection, selection)),
+            (EXPORT_SUBMISSIONS, (selection, selection)),
+        ):
             count = conn.execute(
                 f"SELECT count(*) AS total FROM ({query} LIMIT %s) AS report_rows",
-                (*parameters, MAX_SHEET_ROWS),
+                (*parameters, *ids, MAX_SHEET_ROWS),
             ).fetchone()["total"]
             if count >= MAX_SHEET_ROWS:
                 raise HTTPException(413, "El informe supera el tamaño de una hoja de Excel. Aplica filtros.")
+            if query == EXPORT_SUBMISSIONS and selection is not None and count != len(selection):
+                raise HTTPException(409, "La selección cambió. Vuelve a seleccionar los archivos.")
     return StreamingResponse(
-        export_workbook(pool, parameters), media_type=XLSX_MEDIA_TYPE,
+        export_workbook(pool, parameters, selection), media_type=XLSX_MEDIA_TYPE,
         headers={"Content-Disposition": 'attachment; filename="paridad-informes.xlsx"'},
     )
+
+
+@router.get("/reports/exportar")
+def export_reports(request: Request, activity_id: ContextQuery = "", language_id: ContextQuery = "",
+                   alerts_only: bool = False):
+    return report_download(request, activity_id, language_id, alerts_only)
+
+
+@router.post("/reports/exportar")
+def export_selected_reports(
+    request: Request, csrf: Csrf,
+    selection: Annotated[list[UUID], Form()] = [], all_results: Annotated[bool, Form()] = False,
+    activity_id: Annotated[str, Form(max_length=19)] = "",
+    language_id: Annotated[str, Form(max_length=19)] = "", alerts_only: Annotated[bool, Form()] = False,
+):
+    chosen = sorted(set(selection)) if selection and not all_results else None
+    return report_download(request, activity_id, language_id, alerts_only, chosen, csrf)
 
 
 @router.get("/submissions")
@@ -349,16 +378,25 @@ def remove_submission(request: Request, submission_id: UUID, csrf: Csrf):
     return redirect("/admin/submissions")
 
 
-def excerpt(source: str, span: list[int]) -> list[tuple[int, str]]:
+def fragment_window(source: str, span: list[int], page: int):
+    lines = source.split("\n")
     start, end = span
-    return [
-        (index, line[:240] + ("…" if len(line) > 240 else ""))
-        for index, line in enumerate(source.split("\n")[start - 1:min(end, start + 39)], start)
+    first = max(1, start - FRAGMENT_CONTEXT)
+    last = min(len(lines), end + FRAGMENT_CONTEXT)
+    offset = first + (page - 1) * FRAGMENT_PAGE_LINES
+    shown = [
+        (number, line, start <= number <= end)
+        for number, line in enumerate(lines[offset - 1:min(last, offset + FRAGMENT_PAGE_LINES - 1)], offset)
     ]
+    return shown, last >= offset + FRAGMENT_PAGE_LINES
 
 
 @router.get("/reports/{left_id}/{right_id}")
-def pair_report(request: Request, left_id: UUID, right_id: UUID):
+def pair_report(
+    request: Request, left_id: UUID, right_id: UUID,
+    bloque: Annotated[int, Query(ge=1)] = 1, tramo: Annotated[int, Query(ge=1, le=3000)] = 1,
+    desde: UUID | None = None, origen: ReportOrigin = "informes",
+):
     with request.app.state.pool.connection() as conn:
         user = administrator(conn, request)
         pair = conn.execute(
@@ -377,28 +415,50 @@ def pair_report(request: Request, left_id: UUID, right_id: UUID):
         ).fetchone()
     if not pair:
         raise HTTPException(404, "Comparación no encontrada.")
-    for fragment in pair["fragments"]:
-        fragment["left_excerpt"] = excerpt(pair["left_source"], fragment["left"])
-        fragment["right_excerpt"] = excerpt(pair["right_source"], fragment["right"])
-    return view(request, "pair.html", user=user, pair=pair)
+    fragments = pair["fragments"]
+    fragment, left_lines, right_lines, has_next = None, [], [], False
+    if fragments:
+        if bloque > len(fragments):
+            raise HTTPException(404, "Bloque no encontrado.")
+        fragment = fragments[bloque - 1]
+        left_lines, left_next = fragment_window(pair["left_source"], fragment["left"], tramo)
+        right_lines, right_next = fragment_window(pair["right_source"], fragment["right"], tramo)
+        if not left_lines and not right_lines:
+            raise HTTPException(404, "Tramo no encontrado.")
+        has_next = left_next or right_next
+    elif bloque != 1 or tramo != 1:
+        raise HTTPException(404, "Bloque no encontrado.")
+    local_origin = desde if desde in (left_id, right_id) else None
+    return view(request, "pair.html", user=user, pair=pair, fragment=fragment, block=bloque, segment=tramo,
+                left_lines=left_lines, right_lines=right_lines, has_next=has_next, overview_id=local_origin, origin=origen)
 
 
 @router.get("/submissions/{submission_id}")
-def submission_report(request: Request, submission_id: UUID):
+def submission_report(
+    request: Request, submission_id: UUID, origen: ReportOrigin = "archivos", comparaciones: Page = 1,
+):
     with request.app.state.pool.connection() as conn:
         user = administrator(conn, request)
         submission = conn.execute(
             """SELECT s.id, s.filename, s.source, s.state, s.ai_bp, s.ai_credit, s.ai_features,
-                      s.analysis_version, s.max_similarity_bp, a.code, l.name AS language,
+                      s.analysis_version, s.max_similarity_bp, s.activity_id, s.language_id, a.code, l.name AS language,
                       u.display_name, u.username, COALESCE(a.ai_threshold, cfg.ai_threshold) AS ai_threshold,
                       COALESCE(a.similarity_threshold, cfg.similarity_threshold) AS similarity_threshold
                FROM submissions s JOIN activities a ON a.id = s.activity_id JOIN languages l ON l.id = s.language_id
                JOIN users u ON u.id = s.student_id CROSS JOIN settings cfg WHERE s.id = %s""",
             (submission_id,),
         ).fetchone()
+        if not submission:
+            raise HTTPException(404, "Entrega no encontrada.")
         grade = get_grade(conn, submission_id)
-    return view(request, "submission.html", user=user, submission=submission, grade=grade,
-                mail_ready=notices_enabled())
+        peers = conn.execute(
+            PAIR_LIST + " AND (p.left_id = %s OR p.right_id = %s)" + PAIR_ORDER + " LIMIT %s OFFSET %s",
+            (submission["activity_id"], submission["activity_id"], submission["language_id"],
+             submission["language_id"], False, submission_id, submission_id, PAGE_SIZE + 1,
+             (comparaciones - 1) * PAGE_SIZE),
+        ).fetchall()
+    return view(request, "submission.html", user=user, submission=submission, grade=grade, origin=origen,
+                peers=peers[:PAGE_SIZE], has_next_pair=len(peers) > PAGE_SIZE, comparison_page=comparaciones)
 
 
 @router.post("/submissions/{submission_id}/retry")

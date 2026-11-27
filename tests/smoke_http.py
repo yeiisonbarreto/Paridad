@@ -18,7 +18,7 @@ from openpyxl import Workbook, load_workbook
 BASE = os.getenv("PARIDAD_TEST_URL", "http://localhost:8787").rstrip("/")
 CSRF = re.compile(r'name="csrf" value="([^"]+)"')
 PAIR_LINK = re.compile(r'href="(/admin/reports/[a-f0-9-]+/[a-f0-9-]+)"')
-SUBMISSION_LINK = re.compile(r'href="(/admin/submissions/[a-f0-9-]+)"')
+SUBMISSION_LINK = re.compile(r'href="(/admin/submissions/[a-f0-9-]+)(?:\?origen=informes)?"')
 MOODLE_ORIGIN = os.getenv("PARIDAD_TEST_MOODLE_ORIGIN", "")
 STYLE_CODE = """/* <b>marca de formato</b> */
 int process_value(int initial_value) {
@@ -190,14 +190,20 @@ def main():
 
         reports = assert_status(admin.get("/admin/reports", params={"activity_id": activity_id, "language_id": c_id})).text
         assert "Grupos de similitud" in reports and "3 archivos" in reports
+        assert 'href="/admin/aclaraciones"' in reports
+        assert "/descargar" not in reports and "/eliminar" not in reports
         pair_links = PAIR_LINK.findall(reports)
         assert len(pair_links) == 2 and first_name in reports and second_name in reports
         detail = assert_status(admin.get(pair_links[0])).text
         assert "Fragmentos coincidentes" in detail and "líneas " in detail and "100,00 %" in detail
+        assert detail.count('class="comparison-code"') == 2 and "code-row code-match" in detail
+        assert_status(admin.get(pair_links[0], params={"bloque": 1000}), 404)
         assert_status(first.get(pair_links[0]), 403)
         for link in set(SUBMISSION_LINK.findall(reports)):
             detail = assert_status(admin.get(link)).text
-            assert "Comentarios explicativos" in detail and "Ajustar nota" in detail and "Enviar aviso" in detail
+            assert "Comentarios explicativos" in detail and "Ajustar nota" in detail
+            assert "Comparaciones de esta entrega" in detail
+            assert "/descargar" not in detail and "/eliminar" not in detail and "file-menu" not in detail
             assert "<b>marca de formato</b>" not in detail and "&lt;b&gt;marca de formato&lt;/b&gt;" in detail
             assert_status(second.get(link), 403)
             download = assert_status(admin.get(link + "/descargar"))
@@ -225,9 +231,23 @@ def main():
             workbook.close()
 
         graded = wait_result(first, "primero.c", 10000)
+        selected = post(admin, "/admin/reports/exportar", admin_csrf, 200, selection=graded["id"], **filters)
+        workbook = load_workbook(BytesIO(selected.content))
+        try:
+            assert [row[4] for row in workbook["Entregas"].iter_rows(min_row=2, values_only=True)] == ["primero.c"]
+            pairs_sheet = workbook["Comparaciones"]
+            assert pairs_sheet.max_row == 2
+            assert {pairs_sheet["E2"].value, pairs_sheet["H2"].value} == {"primero.c", "compania.c"}
+        finally:
+            workbook.close()
+        post(first, "/admin/reports/exportar", first_csrf, 403, selection=graded["id"], **filters)
+        post(admin, "/admin/reports/exportar", admin_csrf, 409, selection=graded["id"],
+             activity_id=separate_id, language_id=c_id)
         assert 0 <= graded["grade"] <= 50
         grade_url = f"/student/submissions/{graded['id']}/nota"
-        assert "Comentarios en inglés" in assert_status(first.get(grade_url)).text
+        grade_html = assert_status(first.get(grade_url)).text
+        assert "Comentarios en inglés" in grade_html
+        assert grade_html.count("<textarea") == 1 and 'name="reason"' in grade_html
         assert_status(second.get(grade_url), 404)
         clarification = f"/student/submissions/{graded['id']}/aclaracion"
         post(first, clarification, first_csrf, reason="Verificar los comentarios", comments="Revisar este archivo.")

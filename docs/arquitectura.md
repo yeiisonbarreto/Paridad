@@ -90,7 +90,7 @@ La versión `lexical-1` tiene alcance léxico. La semántica, la expansión de m
 - Se emparejan ocurrencias por orden para acotar el costo en regiones repetitivas. Las ventanas coincidentes adyacentes con el mismo desplazamiento forman bloques. Se priorizan los bloques más largos y se descartan los que se solapan en cualquiera de las dos entregas.
 - La cobertura es `2 × tokens de los bloques elegidos / (tokens de A + tokens de B)`. Se guarda `0,70 × Dice + 0,30 × cobertura`, redondeado a dos decimales porcentuales. La cobertura compara bloques incluso si cambian de posición.
 - Para archivos con menos de ocho tokens se compara la secuencia canónica completa, con resultado de 0 o 100 %. El informe identifica estos casos. Un programa pequeño o una plantilla compartida puede producir similitud alta por razones legítimas.
-- Cada bloque se proyecta a rangos inclusivos de líneas originales. El informe conserva hasta los 25 bloques con mayor cobertura y enlaza al código completo de cada archivo. Cada vista previa muestra hasta 40 líneas y 240 caracteres por línea. Los rangos incluyen cualquier texto intermedio entre los tokens alineados.
+- Cada bloque se proyecta a rangos inclusivos de líneas originales. El informe conserva hasta los 25 bloques con mayor cobertura y enlaza al código completo de cada archivo. El informe muestra los dos archivos lado a lado, resalta el rango coincidente y presenta hasta tres líneas de contexto antes y después. Los bloques largos se recorren en tramos de 60 líneas. Los rangos incluyen cualquier texto intermedio entre los tokens alineados.
 
 El límite por defecto es de 250 entregas por combinación actividad/lenguaje. Una entrega nueva hace hasta 249 comparaciones con ese valor. Puedes ajustar el límite con `PARIDAD_SCOPE_LIMIT`. El total de pares en un ámbito crece cuadráticamente. Ajustar los límites requiere medir las colas y los tiempos con archivos representativos.
 
@@ -127,7 +127,7 @@ La nota automática suma hasta 15 puntos de estructura, 10 de prácticas, 10 de 
 | `/invitacion` | GET/POST | Estudiante con token válido. Configuración de contraseña con un enlace de un solo uso. |
 | `/admin/activities`, `/admin/activities/{id}`, `/admin/languages` | GET/POST, POST, POST | Administrador. Actividades, umbrales por actividad y perfiles configurables. |
 | `/admin/reports`, `/admin/reports/{izq}/{der}` | GET | Administrador. Grupos, comparaciones y fragmentos. |
-| `/admin/reports/exportar` | GET | Administrador. Similitudes, indicios y notas en Excel. |
+| `/admin/reports/exportar` | GET, POST | Administrador. Excel global por filtro o por selección, con similitudes, indicios y notas. |
 | `/admin/avisos` | POST | Administrador. Avisos manuales a estudiantes seleccionados. |
 | `/admin/aclaraciones`, `/admin/submissions/{id}/aclaracion`, `/admin/submissions/{id}/nota` | GET, POST, POST | Administrador. Listado, respuesta y ajuste de nota. |
 | `/admin/submissions`, `/admin/submissions/{id}`, `/admin/submissions/{id}/descargar` | GET | Administrador. Listado de entregas, código, explicación del indicio y descarga. |

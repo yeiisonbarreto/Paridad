@@ -350,7 +350,7 @@ code { font: 0.85rem/1.55 ui-monospace, "Cascadia Code", monospace; }
   margin-block-start: 0.4rem;
 }
 
-@media (max-width: 54rem) {
+@media (max-width: 64rem) {
   .header-row { flex-wrap: wrap; }
   .section-nav { flex: 0 0 100%; order: 2; margin-inline-start: 0; overflow-x: auto; }
   .section-links { width: max-content; min-width: 100%; padding-block: 0.12rem; }
@@ -386,3 +386,31 @@ code { font: 0.85rem/1.55 ui-monospace, "Cascadia Code", monospace; }
 .bulk-actions { border: 0; margin: 0; padding: 0; }
 .bulk-actions[disabled], .file-action-button:disabled { opacity: 0.54; cursor: default; }
 .file-action-button:disabled:hover { background: transparent; }
+
+.compact-button { min-height: 2rem; padding: 0.24rem 0.55rem; font-size: 0.84rem; }
+.report-links { gap: 0.9rem; }
+.report-toolbar {
+  position: sticky; z-index: 3; top: 4.25rem; display: flex; flex-wrap: wrap;
+  align-items: center; gap: 0.55rem; padding: 0.6rem 0; margin-bottom: 0.6rem;
+  background: var(--paper); border-bottom: 1px solid var(--line);
+}
+.report-toolbar .report-selection { flex: 1 1 26rem; margin: 0; }
+.report-toolbar + .field-help { margin: 0.1rem 0 0.8rem; }
+.clarification-card { border-top: 2px solid var(--brand); }
+.clarification-card .button { justify-self: start; }
+.clarification-link { display: flex; width: fit-content; margin-top: 0.3rem; }
+.history td:has(.clarification-link) { min-width: 7rem; }
+.fragment-tools, .fragment-picker { display: flex; flex-wrap: wrap; align-items: center; gap: 0.7rem; }
+.fragment-tools { justify-content: space-between; margin-block: 0.75rem 0.45rem; }
+.fragment-picker select { width: auto; max-width: 100%; }
+.match-legend { display: inline-flex; gap: 0.42rem; align-items: center; color: var(--muted); }
+.match-legend::before { content: ""; width: 0.85rem; height: 0.85rem; background: #8d6723; border-radius: 0.22rem; }
+.comparison-code { max-height: min(65vh, 35rem); padding: 0.65rem 0; }
+.comparison-code code { display: block; min-width: max-content; }
+.code-row { display: inline-block; min-width: 100%; padding-inline: 0.7rem; }
+.code-row .line-number { display: inline-block; width: 5ch; text-align: end; }
+.code-match { background: #5a461e; box-shadow: inset 3px 0 #eab958; }
+.comparison-metrics { margin-top: 0.65rem; }
+@media (max-width: 64rem) {
+  .report-toolbar { top: 6.75rem; }
+}

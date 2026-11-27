@@ -1,40 +1,72 @@
 {% extends "base.html" %}
-{% macro code_block(span, snippet, filename) %}
-<div class="code-panel">
-  <h3>{{ filename }} · líneas {{ span[0] }}–{{ span[1] }}</h3>
-  <pre tabindex="0"><code>{% for number, line in snippet %}<span class="line-number">{{ number }}</span>  {{ line }}
+{% macro code_block(span, lines, filename, name, username, id, ai) %}
+<section class="code-panel">
+  <h3>{{ filename }}</h3>
+  <p class="table-detail">{{ name }} ({{ username }}) · IA {{ ai|percent }}</p>
+  <p class="table-detail">Coincidencia en líneas {{ span[0] }}–{{ span[1] }} · <a href="/admin/submissions/{{ id }}?origen=informes">Ver entrega</a></p>
+  {% if lines %}
+  <pre class="comparison-code" tabindex="0" aria-label="Código de {{ filename }}"><code>{% for number, line, match in lines %}<span class="code-row{% if match %} code-match{% endif %}"><span class="line-number" aria-hidden="true">{{ number }}</span>{{ '  ' ~ line }}</span>
 {% endfor %}</code></pre>
-  {% if span[1] - span[0] >= 40 %}<p class="muted">Se muestran las primeras 40 líneas del fragmento.</p>{% endif %}
-</div>
+  {% endif %}
+</section>
 {% endmacro %}
-{% block title %}Fragmentos · Paridad{% endblock %}
+{% block title %}Comparación · Paridad{% endblock %}
 {% block content %}
 <div class="page-heading">
-  <a href="/admin/reports">Volver a informes</a>
+  {% if overview_id %}<a href="/admin/submissions/{{ overview_id }}?origen={{ origin }}#comparaciones">Volver a la entrega</a>
+  {% else %}<a href="/admin/reports#comparaciones">Volver a informes</a>{% endif %}
   <h1>Fragmentos coincidentes</h1>
   <p>{{ pair.code }} · {{ pair.language }}</p>
 </div>
 <section class="card">
   {% set threshold = pair.similarity_threshold if pair.similarity_threshold is not none else pair.global_threshold %}
-  <h2>Similitud {{ pair.score_bp|percent }}{% if pair.score_bp > 100 * threshold %}<span class="tag alert">Revisión</span>{% endif %}</h2>
-  <p>Umbral {{ threshold }} % · Dice de k-gramas {{ pair.metrics.dice_bp|percent }} · Cobertura {{ pair.metrics.coverage_bp|percent }}</p>
-  <div class="grid-two">
-    <a href="/admin/submissions/{{ pair.left_id }}">{{ pair.left_name }} ({{ pair.left_username }}) · IA {{ pair.left_ai_bp|percent }}</a>
-    <a href="/admin/submissions/{{ pair.right_id }}">{{ pair.right_name }} ({{ pair.right_username }}) · IA {{ pair.right_ai_bp|percent }}</a>
+  <div class="grade-heading">
+    <h2>Similitud {{ pair.score_bp|percent }}{% if pair.score_bp > 100 * threshold %}<span class="tag alert">Revisión</span>{% endif %}</h2>
+    <span class="muted">Umbral {{ threshold }} %</span>
   </div>
-  {% if pair.metrics.short_sample %}<p class="callout">Muestra breve. El resultado se basa en la coincidencia de los tokens de todo el archivo.</p>{% endif %}
-</section>
-<section class="card section-gap">
-  <h2>Bloques de líneas</h2>
-  {% if pair.metrics.block_count > pair.fragments|length %}<p class="muted">Mostrando {{ pair.fragments|length }} de {{ pair.metrics.block_count }} bloques.</p>{% endif %}
-  {% for fragment in pair.fragments %}
-    <details class="record-disclosure" name="code-fragments"{% if loop.first %} open{% endif %}>
-      <summary>Bloque {{ loop.index }} · {{ fragment.tokens }} tokens alineados</summary>
-      <div class="grid-two disclosure-content">
-        {{ code_block(fragment.left, fragment.left_excerpt, pair.left_filename) }}
-        {{ code_block(fragment.right, fragment.right_excerpt, pair.right_filename) }}
-      </div>
-    </details>
-  {% else %}<p class="empty">No hay bloques coincidentes.</p>{% endfor %}
+  {% if pair.metrics.short_sample %}<p class="muted">Muestra breve. La similitud se basa en los tokens de todo el archivo.</p>{% endif %}
+  {% if fragment %}
+  {% set origin_query = '&desde=' ~ overview_id ~ '&origen=' ~ origin if overview_id else '' %}
+  <div class="fragment-tools">
+    {% if pair.fragments|length > 1 %}
+    <form method="get" class="fragment-picker" action="/admin/reports/{{ pair.left_id }}/{{ pair.right_id }}">
+      {% if overview_id %}
+      <input type="hidden" name="desde" value="{{ overview_id }}">
+      <input type="hidden" name="origen" value="{{ origin }}">
+      {% endif %}
+      <label for="fragment-number">Bloque</label>
+      <select name="bloque" id="fragment-number">
+        {% for candidate in pair.fragments %}
+        <option value="{{ loop.index }}"{% if loop.index == block %} selected{% endif %}>{{ loop.index }} de {{ pair.fragments|length }} · líneas {{ candidate.left[0] }}–{{ candidate.left[1] }} / {{ candidate.right[0] }}–{{ candidate.right[1] }}</option>
+        {% endfor %}
+      </select>
+      <button class="button secondary compact-button" type="submit">Ir al bloque</button>
+    </form>
+    {% endif %}
+    <span class="match-legend">Líneas coincidentes</span>
+  </div>
+  {% if pair.metrics.block_count > pair.fragments|length %}<p class="muted">Se muestran los {{ pair.fragments|length }} bloques más largos de {{ pair.metrics.block_count }}.</p>{% endif %}
+  <div class="grid-two comparison-grid">
+    {{ code_block(fragment.left, left_lines, pair.left_filename, pair.left_name, pair.left_username, pair.left_id, pair.left_ai_bp) }}
+    {{ code_block(fragment.right, right_lines, pair.right_filename, pair.right_name, pair.right_username, pair.right_id, pair.right_ai_bp) }}
+  </div>
+  {% if segment > 1 or has_next %}
+  <nav class="pagination" aria-label="Tramos del bloque">
+    {% if segment > 1 %}<a href="?bloque={{ block }}&amp;tramo={{ segment - 1 }}{{ origin_query }}">Tramo anterior</a>{% endif %}
+    <span>Tramo {{ segment }}</span>
+    {% if has_next %}<a href="?bloque={{ block }}&amp;tramo={{ segment + 1 }}{{ origin_query }}">Siguiente tramo</a>{% endif %}
+  </nav>
+  {% endif %}
+  {% else %}
+  <p class="empty">No hay bloques coincidentes.</p>
+  <div class="filter-actions">
+    <a href="/admin/submissions/{{ pair.left_id }}?origen=informes">{{ pair.left_filename }}</a>
+    <a href="/admin/submissions/{{ pair.right_id }}?origen=informes">{{ pair.right_filename }}</a>
+  </div>
+  {% endif %}
+  <details class="record-disclosure comparison-metrics">
+    <summary>Métricas de similitud</summary>
+    <p class="disclosure-content">Dice de k-gramas {{ pair.metrics.dice_bp|percent }} · Cobertura {{ pair.metrics.coverage_bp|percent }}</p>
+  </details>
 </section>
 {% endblock %}

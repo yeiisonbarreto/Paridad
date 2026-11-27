@@ -5,14 +5,57 @@
 {% block content %}
 <div class="page-heading grade-heading">
   <h1>Informes</h1>
-  <div class="filter-actions"><a class="button secondary" href="#entregas">Avisos</a>
-  <a class="button secondary" href="/admin/aclaraciones">Aclaraciones</a></div>
+  <nav class="filter-actions report-links" aria-label="Secciones del informe">
+    <a href="#entregas">Entregas</a>
+    <a href="#comparaciones">Comparaciones</a>
+    <a href="#grupos">Grupos</a>
+  </nav>
 </div>
 {{ results_filters('/admin/reports', labs, languages, selected_activity, selected_language, alerts_only) }}
-<section class="card section-gap" aria-labelledby="groups-heading">
+
+<section class="card section-gap report-deliveries" id="entregas" aria-labelledby="deliveries-heading">
+  <h2 id="deliveries-heading">Entregas</h2>
+  {% if submissions %}
+  <div class="report-toolbar">
+    <form action="/admin/avisos" method="post" id="report-selection" class="bulk-toolbar report-selection" data-bulk-selection>
+      {{ csrf(user) }}
+      <input type="hidden" name="activity_id" value="{{ selected_activity or '' }}">
+      <input type="hidden" name="language_id" value="{{ selected_language or '' }}">
+      {% if alerts_only %}<input type="hidden" name="alerts_only" value="true">{% endif %}
+      {{ bulk_controls('Todos los archivos del filtro', [('notice', 'Enviar aviso')], disabled=not mail_ready) }}
+    </form>
+    <button type="submit" form="report-selection" formaction="/admin/reports/exportar" class="button">Descargar Excel</button>
+  </div>
+  {% if not mail_ready %}<p class="field-help">Configura SMTP y el remitente para enviar avisos.</p>{% endif %}
+  {% endif %}
+  {{ submission_table(submissions, user, mail_ready, selection_form='report-selection') }}
+</section>
+
+<section class="card section-gap" id="comparaciones" aria-labelledby="comparison-heading">
+  <h2 id="comparison-heading">Comparaciones</h2>
+  {% if pairs %}
+  <div class="table-wrap" tabindex="0" role="region" aria-label="Comparaciones entre estudiantes">
+    <table>
+      <thead><tr><th scope="col">Primera entrega</th><th scope="col">Segunda entrega</th><th scope="col">Actividad y lenguaje</th><th scope="col">Similitud</th><th scope="col">Detalle</th></tr></thead>
+      <tbody>{% for pair in pairs %}
+      <tr>
+        <td>{{ pair.left_filename }}<span class="table-detail">{{ pair.left_name }} ({{ pair.left_username }})</span></td>
+        <td>{{ pair.right_filename }}<span class="table-detail">{{ pair.right_name }} ({{ pair.right_username }})</span></td>
+        <td>{{ pair.code }}<span class="table-detail">{{ pair.language }}</span></td>
+        <td class="numeric">{{ pair.score_bp|percent }}{% if pair.alert %}<span class="tag alert">Revisión</span>{% endif %}</td>
+        <td><a class="button secondary compact-button" href="/admin/reports/{{ pair.left_id }}/{{ pair.right_id }}"
+               aria-label="Ver comparación entre {{ pair.left_filename }} y {{ pair.right_filename }}">Ver</a></td>
+      </tr>
+      {% endfor %}</tbody>
+    </table>
+  </div>
+  {% else %}<p class="empty">Sin comparaciones para estos filtros.</p>{% endif %}
+</section>
+
+<section class="card section-gap" id="grupos" aria-labelledby="groups-heading">
   <h2 id="groups-heading">Grupos de similitud</h2>
   {% for group in groups %}
-  <details class="record-disclosure"{% if loop.first %} open{% endif %}>
+  <details class="record-disclosure">
     <summary>
       <span class="record-summary-text">
         <span>{{ group.code }} · {{ group.language }}</span>
@@ -20,49 +63,9 @@
       </span>
       <span class="tag alert">{{ group.max_score|percent }}</span>
     </summary>
-    <div class="disclosure-content">
-      {{ submission_table(group.files, user, mail_ready, grouped=true) }}
-    </div>
+    <div class="disclosure-content">{{ submission_table(group.files, user, mail_ready, grouped=true) }}</div>
   </details>
   {% else %}<p class="empty">Ningún grupo supera el umbral de similitud.</p>{% endfor %}
 </section>
-<details class="card section-gap panel-disclosure"{% if not groups and pairs %} open{% endif %}>
-  <summary>Comparaciones individuales</summary>
-  <div class="disclosure-content">
-  {% if pairs %}
-  <div class="table-wrap" tabindex="0" role="region" aria-label="Comparaciones">
-  <table>
-    <thead><tr><th scope="col">Estudiantes</th><th scope="col">Actividad y lenguaje</th><th scope="col">Similitud</th><th scope="col">Evidencia</th></tr></thead>
-    <tbody>{% for pair in pairs %}
-    <tr>
-      <td>{{ pair.left_name }} ({{ pair.left_username }})<br>{{ pair.right_name }} ({{ pair.right_username }})</td>
-      <td>{{ pair.code }}<span class="table-detail">{{ pair.language }}</span></td>
-      <td class="numeric">{{ pair.score_bp|percent }}{% if pair.alert %}<span class="tag alert">Revisión</span>{% endif %}</td>
-      <td><a href="/admin/reports/{{ pair.left_id }}/{{ pair.right_id }}">Ver fragmentos</a></td>
-    </tr>
-    {% endfor %}</tbody>
-  </table>
-  </div>
-  {% else %}<p class="empty">Sin comparaciones para estos filtros.</p>{% endif %}
-  </div>
-</details>
-<details class="card section-gap panel-disclosure" id="entregas" open>
-  <summary>Entregas, notas y avisos</summary>
-  <div class="disclosure-content">
-    {% if submissions %}
-    <form action="/admin/avisos" method="post" id="report-selection" class="bulk-toolbar" data-bulk-selection>
-      {{ csrf(user) }}
-      <input type="hidden" name="activity_id" value="{{ selected_activity or '' }}">
-      <input type="hidden" name="language_id" value="{{ selected_language or '' }}">
-      {% if alerts_only %}<input type="hidden" name="alerts_only" value="true">{% endif %}
-      {{ bulk_controls('Todos los archivos del filtro', [('notice', 'Enviar aviso a la selección')], disabled=not mail_ready) }}
-    </form>
-    {% endif %}
-    {% if not mail_ready %}
-    <p class="field-help">Configura SMTP y el remitente para enviar avisos.</p>
-    {% endif %}
-    {{ submission_table(submissions, user, mail_ready, selection_form='report-selection') }}
-  </div>
-</details>
 {{ pagination('/admin/reports', page, has_next, ('&activity_id=' ~ selected_activity if selected_activity else '') ~ ('&language_id=' ~ selected_language if selected_language else '') ~ ('&alerts_only=true' if alerts_only else '')) }}
 {% endblock %}

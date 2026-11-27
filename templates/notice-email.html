@@ -1,0 +1,27 @@
+<!doctype html>
+<html lang="es">
+<head><meta charset="utf-8"><title>Revisa tu trabajo en Paridad</title></head>
+<body style="margin:0;padding:24px;color:#242322;background:#f8f7f5;font:16px/1.55 Arial,sans-serif">
+  <table role="presentation" width="100%" cellspacing="0" cellpadding="0" style="max-width:580px;margin:auto;background:#fff;border:1px solid #e8e2dc">
+    <tr>
+      <td style="padding:24px">
+        {% if logo_id %}
+        <img src="cid:{{ logo_id }}" alt="Paridad" width="180" style="display:block;width:180px;max-width:100%;height:auto">
+        {% else %}
+        <p style="margin:0;font-size:22px">Paridad</p>
+        {% endif %}
+        <h1 style="font-size:22px;font-weight:600;margin:24px 0 16px">Revisa tu trabajo</h1>
+        <p>Hola, {{ name }}:</p>
+        <p>{{ detail }}</p>
+        {% if url %}
+        <p><a href="{{ url }}" style="color:#76201c">Consultar mis entregas</a></p>
+        {% else %}
+        <p>Ingresa a Paridad para ver el resultado.</p>
+        {% endif %}
+        <p>Cordialmente,<br>Paridad</p>
+        <p style="margin:24px 0 0;padding-top:16px;border-top:1px solid #e8e2dc;color:#645e59;font-size:14px">{{ footer }}</p>
+      </td>
+    </tr>
+  </table>
+</body>
+</html>

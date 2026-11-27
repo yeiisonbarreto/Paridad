@@ -71,7 +71,7 @@
               {% if result.grade is not none %}
               <a href="/student/submissions/{{ result.id }}/nota" aria-label="Ver nota de {{ result.filename }}">{{ result.grade }} / 50</a>
               {{ clarification_status(result.clarification_status) }}
-              {% if not result.clarification_status %}<a class="table-detail" href="/student/submissions/{{ result.id }}/nota">Pedir aclaración</a>{% endif %}
+              {% if not result.clarification_status %}<a class="button secondary compact-button clarification-link" href="/student/submissions/{{ result.id }}/nota#aclaracion">Pedir aclaración</a>{% endif %}
               {% else %}—{% endif %}
             </td>
           </tr>

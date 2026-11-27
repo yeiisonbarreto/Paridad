@@ -1,14 +1,13 @@
 {% extends "base.html" %}
 {% from "macros.html" import csrf %}
-{% from "report-components.html" import file_actions %}
 {% from "grade-components.html" import grade_breakdown, clarification_content %}
 {% block title %}{{ submission.filename }} · Paridad{% endblock %}
 {% block content %}
 <div class="page-heading">
-  <a href="/admin/submissions">Volver a archivos</a>
+  {% if origin == 'informes' %}<a href="/admin/reports#entregas">Volver a informes</a>
+  {% else %}<a href="/admin/submissions">Volver a archivos</a>{% endif %}
   <h1>{{ submission.filename }}</h1>
   <p>{{ submission.display_name }} ({{ submission.username }}) · {{ submission.code }} · {{ submission.language }}</p>
-  {{ file_actions(submission, user, mail_ready, false, 'submissions') }}
 </div>
 <section class="card">
   <h2>Resultado del análisis</h2>
@@ -18,6 +17,7 @@
       {% if submission.ai_credit %}<span class="tag">Declarada</span>
       {% elif submission.ai_bp > 100 * submission.ai_threshold %}<span class="tag alert">Posible uso sin declarar</span>{% endif %}
     </p>
+    {% if peers %}<p><a href="#comparaciones">Ver similitudes con otras entregas</a></p>{% endif %}
     <p class="muted">El puntaje resume señales de estilo y estructura. Su interpretación requiere revisión académica.</p>
     {% if submission.ai_credit %}<p><strong>Crédito declarado</strong> {{ submission.ai_credit }}</p>{% endif %}
     <div class="table-wrap" tabindex="0" role="region" aria-label="Métricas del indicio de IA">
@@ -81,6 +81,33 @@
   </section>
   {% endif %}
 </div>
+{% if peers or comparison_page > 1 %}
+<section class="card section-gap" id="comparaciones" aria-labelledby="peer-heading">
+  <h2 id="peer-heading">Comparaciones de esta entrega</h2>
+  <div class="table-wrap" tabindex="0" role="region" aria-label="Comparaciones de esta entrega">
+    <table>
+      <thead><tr><th scope="col">Archivo</th><th scope="col">Estudiante</th><th scope="col">Similitud</th><th scope="col">Detalle</th></tr></thead>
+      <tbody>{% for peer in peers %}
+      {% set left = peer.left_id == submission.id %}
+      {% set filename = peer.right_filename if left else peer.left_filename %}
+      {% set name = peer.right_name if left else peer.left_name %}
+      <tr>
+        <td>{{ filename }}</td><td>{{ name }}</td>
+        <td class="numeric">{{ peer.score_bp|percent }}{% if peer.alert %}<span class="tag alert">Revisión</span>{% endif %}</td>
+        <td><a class="button secondary compact-button" href="/admin/reports/{{ peer.left_id }}/{{ peer.right_id }}?desde={{ submission.id }}&amp;origen={{ origin }}" aria-label="Ver comparación con {{ filename }}">Ver</a></td>
+      </tr>
+      {% endfor %}</tbody>
+    </table>
+  </div>
+  {% if comparison_page > 1 or has_next_pair %}
+  <nav class="pagination" aria-label="Páginas de comparaciones">
+    {% if comparison_page > 1 %}<a href="?origen={{ origin }}&amp;comparaciones={{ comparison_page - 1 }}#comparaciones">Anterior</a>{% endif %}
+    <span>Página {{ comparison_page }}</span>
+    {% if has_next_pair %}<a href="?origen={{ origin }}&amp;comparaciones={{ comparison_page + 1 }}#comparaciones">Siguiente</a>{% endif %}
+  </nav>
+  {% endif %}
+</section>
+{% endif %}
 <details class="card section-gap panel-disclosure" open>
   <summary>Código de la entrega</summary>
   <div class="disclosure-content"><pre tabindex="0"><code>{{ submission.source }}</code></pre></div>
