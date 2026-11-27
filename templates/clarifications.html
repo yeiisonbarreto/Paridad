@@ -26,7 +26,7 @@
         <td>{{ row.filename }} <span class="table-detail">{{ row.activity }}</span></td>
         <td>{{ row.grade if row.grade is not none else '—' }} / 50</td>
         <td>{{ clarification_status(row.status) }}</td>
-        <td><a href="/admin/submissions/{{ row.id }}#aclaracion">{{ 'Responder' if row.status == 'pending' else 'Ver respuesta' }}</a></td>
+        <td><a class="button secondary compact-button" href="/admin/aclaraciones/{{ row.id }}" data-record-action aria-haspopup="dialog">{{ 'Responder' if row.status == 'pending' else 'Ver respuesta' }}</a></td>
       </tr>{% endfor %}</tbody>
     </table>
   </div>

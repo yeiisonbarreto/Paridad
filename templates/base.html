@@ -76,7 +76,7 @@
   </header>
   {% endblock %}
   <main class="shell content" id="main">{% block content %}{% endblock %}</main>
-  {% if user and (request.url.path == '/student' or request.url.path.startswith('/admin/accounts') or request.url.path.startswith('/admin/activities')) %}
+  {% if user and (request.url.path.startswith('/student') or request.url.path in ['/admin', '/admin/settings'] or request.url.path.startswith(('/admin/accounts', '/admin/activities', '/admin/aclaraciones'))) %}
   <dialog class="notice-dialog record-dialog" id="record-action-dialog" aria-label="Ventana de Paridad">
     <div class="notice-dialog-inner">
       <p class="callout alert" data-record-error role="alert" hidden></p>

@@ -43,7 +43,7 @@ Desde **Cuentas** puedes crear cuentas individuales, editar el correo y restable
 
 Para importar, descarga la plantilla en **Cuentas → Importar estudiantes**. Completa las columnas `ID`, `Nombre` y `Correo` en la primera hoja y sube el archivo `.xlsx`. Puedes importar hasta 200 filas y 128 KiB por archivo. Guarda los IDs con ceros iniciales como texto. Si un ID o correo está repetido o hay una fila inválida, se rechaza el archivo completo y se indica la fila.
 
-Tras importar, pulsa **Descargar credenciales** en la ventana de importación y guarda `paridad-credenciales.xlsx`. Contiene las columnas **ID** y **Contraseña**, con una contraseña inicial aleatoria distinta por estudiante. PostgreSQL guarda los hashes y el administrador puede restablecer contraseñas desde **Cuentas**.
+Al pulsar **Importar**, se descarga automáticamente `paridad-credenciales.xlsx`. Contiene las columnas **ID** y **Contraseña**, con una contraseña inicial aleatoria distinta por estudiante. PostgreSQL guarda los hashes y el administrador puede restablecer contraseñas desde **Cuentas**.
 
 En **Cuentas → Acciones** puedes modificar, inhabilitar, reactivar o eliminar una cuenta. Para que un estudiante elija su contraseña, selecciona **Generar enlace de invitación** y pulsa **Copiar enlace**. El enlace es personal, sirve una vez y caduca en 24 horas. Generar otro reemplaza el anterior.
 
@@ -55,11 +55,17 @@ En **Archivos**, abre **Acciones** para ver, descargar o eliminar una entrega. M
 
 En **Cuentas**, **Informes**, **Aclaraciones** y **Archivos** puedes buscar estudiantes por nombre o ID. Los filtros se aplican al cambiar y las descargas y acciones en lote respetan el filtro activo.
 
-En la pestaña **Entregas** de **Informes**, **Descargar Excel** está al lado de la selección. Si marcas archivos, el libro incluye esas entregas y sus comparaciones. Si dejas la selección vacía o marcas **Todos los archivos del filtro**, incluye todas las páginas de los filtros activos. Desde **Comparaciones**, abre **Ver** para revisar ambos archivos con las líneas coincidentes resaltadas. Los grupos reúnen archivos de la misma actividad y lenguaje conectados por coincidencias por encima del umbral.
+En la pestaña **Entregas** de **Informes**, **Descargar Excel** está al lado de la selección. Si marcas archivos, el libro incluye esas entregas y sus comparaciones. Marca una o varias entregas para habilitar la descarga. **Todos** incluye todas las entregas de los filtros activos. Desde **Comparaciones**, abre **Ver** para revisar ambos archivos con las líneas coincidentes resaltadas. Los grupos reúnen archivos de la misma actividad y lenguaje conectados por coincidencias por encima del umbral.
+
+## Panel de administración
+
+Filtra la participación, las alertas y las notas por módulo, actividad o lenguaje. La participación cuenta estudiantes únicos con al menos una entrega y se calcula sobre las cuentas inscritas. Las tasas de alerta se calculan sobre las entregas analizadas.
+
+Al guardar los umbrales globales, todas las actividades adoptan esos valores. Las actividades nuevas los heredan. Puedes ajustar por separado una actividad existente.
 
 ## Módulos y plazos
 
-En **Actividades**, crea un módulo como **LAB01** y asigna al módulo las actividades **LAB01A** y **LAB01B**. Cada actividad tiene sus propios lenguajes y horarios. Los horarios se interpretan en `PARIDAD_TIME_ZONE` (por defecto, `America/Bogota`). Al abrir un módulo desde **Mis entregas**, aparece una ventana para enviar archivos y consultar el cierre y el tiempo restante de cada entrega.
+En **Actividades**, crea un módulo como **LAB01** y asigna al módulo las actividades **LAB01A** y **LAB01B**. Cada actividad tiene sus propios lenguajes y horarios. Los horarios se interpretan en `PARIDAD_TIME_ZONE` (por defecto, `America/Bogota`). Al abrir un módulo desde **Mis entregas**, se muestran sus actividades, sus plazos y su historial. **Subir archivo** abre la ventana de envío y **Todos los módulos** muestra el historial completo.
 
 Abre un módulo para gestionar sus actividades o editar y eliminar el módulo. En **Acciones** puedes editar una actividad, cerrar o reabrir entregas y eliminarla tras confirmar. Reabrir conserva el plazo configurado. Eliminar una actividad borra sus archivos, comparaciones y aclaraciones vinculadas. La migración asigna cada actividad existente a un módulo de su mismo código y conserva su estado y sus entregas.
 

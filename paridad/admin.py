@@ -8,6 +8,7 @@ from psycopg import errors
 from psycopg.types.json import Jsonb
 
 from .analysis import COMMENT_STYLES
+from .dashboard import activity_metrics
 from .security import (
     PASSWORDS, USERNAME, auth_user, check_csrf, normalized_username, password_session, valid_password, verify_password,
 )
@@ -68,20 +69,41 @@ def optional_threshold(value: str):
     return int(value)
 
 
+def optional_context_id(value: str) -> int | None:
+    if not value:
+        return None
+    if not re.fullmatch(r"[0-9]+", value) or not 0 < int(value) < 2**63:
+        raise HTTPException(400, "Identificador de filtro inválido.")
+    return int(value)
+
+
 @router.get("")
-def dashboard(request: Request):
+def dashboard(
+    request: Request, module_id: ContextQuery = "", activity_id: ContextQuery = "", language_id: ContextQuery = "",
+):
+    with request.app.state.pool.connection() as conn:
+        conn.execute("SET TRANSACTION ISOLATION LEVEL REPEATABLE READ")
+        user = administrator(conn, request)
+        modules = conn.execute("SELECT id, code, title FROM modules ORDER BY code").fetchall()
+        activities = conn.execute("SELECT id, module_id, code FROM activities ORDER BY code").fetchall()
+        languages = conn.execute("SELECT id, name FROM languages ORDER BY name").fetchall()
+        module = optional_context_id(module_id)
+        activity = optional_context_id(activity_id)
+        language = optional_context_id(language_id)
+        totals, participation = activity_metrics(conn, module, activity, language)
+    return view(
+        request, "admin.html", user=user, totals=totals, participation=participation,
+        modules=modules, activities=activities, languages=languages,
+        selected_module=module, selected_activity=activity, selected_language=language,
+    )
+
+
+@router.get("/settings")
+def settings_form(request: Request):
     with request.app.state.pool.connection() as conn:
         user = administrator(conn, request)
-        settings = conn.execute("SELECT * FROM settings WHERE id = 1").fetchone()
-        totals = conn.execute(
-            """SELECT (SELECT count(*) FROM users WHERE role = 'STUDENT') AS students,
-                      (SELECT count(*) FROM activities WHERE is_open
-                          AND (opens_at IS NULL OR opens_at <= now())
-                          AND (closes_at IS NULL OR closes_at > now())) AS activities,
-                      (SELECT count(*) FROM submissions WHERE state = 'pending') AS pending,
-                      (SELECT count(*) FROM submissions WHERE state = 'failed') AS failed"""
-        ).fetchone()
-    return view(request, "admin.html", user=user, settings=settings, totals=totals)
+        values = conn.execute("SELECT * FROM settings WHERE id = 1").fetchone()
+    return view(request, "admin-settings.html", user=user, settings=values)
 
 
 @router.post("/settings")
@@ -91,6 +113,10 @@ def settings(request: Request, csrf: Csrf, similarity_threshold: Threshold, ai_t
         conn.execute(
             "UPDATE settings SET similarity_threshold = %s, ai_threshold = %s WHERE id = 1",
             (similarity_threshold, ai_threshold),
+        )
+        conn.execute(
+            """UPDATE activities SET similarity_threshold = NULL, ai_threshold = NULL
+               WHERE similarity_threshold IS NOT NULL OR ai_threshold IS NOT NULL"""
         )
     return redirect("/admin")
 

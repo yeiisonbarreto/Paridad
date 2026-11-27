@@ -8,26 +8,15 @@
   {% if kind == 'importar' %}
     <form action="/admin/accounts/importar" method="post" enctype="multipart/form-data" class="stack" data-credentials-import>
       {{ csrf(user) }}
-      <div class="roster-guide">
-        <p class="muted">Completa ID, Nombre y Correo. Guarda el ID como texto para conservar los ceros iniciales.</p>
-        <a href="/admin/accounts/plantilla">Descargar plantilla Excel</a>
-      </div>
       <label>Lista de estudiantes
         <input type="file" name="roster" accept=".xlsx" required aria-describedby="roster-help">
       </label>
       <p class="field-help" id="roster-help">.xlsx de hasta 128 KiB y {{ roster_limit }} filas.</p>
       <div class="notice-dialog-actions">
         <a href="/admin/accounts" class="button secondary" data-record-close>Cancelar</a>
-        <button type="submit" class="button">Importar estudiantes</button>
+        <button type="submit" class="button">Importar</button>
       </div>
     </form>
-    <div class="stack" data-credentials-ready hidden>
-      <p role="status">Importación completa. Descarga las credenciales antes de cerrar.</p>
-      <div class="notice-dialog-actions">
-        <a href="/admin/accounts" class="button secondary" data-record-close>Cerrar</a>
-        <a class="button" data-credentials-download download="paridad-credenciales.xlsx">Descargar credenciales</a>
-      </div>
-    </div>
   {% else %}
     <form action="/admin/accounts" method="post" class="stack">
       {{ csrf(user) }}

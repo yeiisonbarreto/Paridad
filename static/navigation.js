@@ -71,7 +71,7 @@ function initializeListControls(root) {
     const page = form.querySelector("[data-bulk-page]");
     const all = form.querySelector("[data-bulk-all]");
     const items = Array.from(form.elements).filter(item => item.hasAttribute("data-bulk-item"));
-    const actions = form.querySelectorAll('button[type="submit"]');
+    const actions = Array.from(form.elements).filter(item => item.matches('button[type="submit"]'));
     if (page) form.querySelector("[data-page-selection]").hidden = false;
 
     function updateSelection() {
@@ -105,8 +105,21 @@ if (filterForm && resultsRegion) {
   const status = filterForm.querySelector("[data-filter-status]");
   const search = filterForm.elements.q;
   const reportTabs = document.querySelector("[data-report-tabs]");
+  const modules = filterForm.elements.module_id;
+  const activities = filterForm.elements.activity_id;
   let pending;
   let delay;
+
+  function syncActivities() {
+    if (!modules || !activities) return;
+    for (const option of activities.options) {
+      option.disabled = Boolean(modules.value && option.dataset.module && option.dataset.module !== modules.value);
+      option.hidden = option.disabled;
+      if (option.disabled && option.selected) activities.value = "";
+    }
+  }
+
+  syncActivities();
 
   async function applyFilters() {
     const request = new AbortController();
@@ -166,15 +179,26 @@ if (filterForm && resultsRegion) {
     scheduleFilters(0);
   });
 
+  resultsRegion.addEventListener("click", event => {
+    const link = event.target.closest("[data-dashboard-module]");
+    if (!link || event.ctrlKey || event.metaKey || event.shiftKey || event.altKey) return;
+    event.preventDefault();
+    modules.value = link.dataset.dashboardModule;
+    syncActivities();
+    scheduleFilters(0);
+    modules.focus({ preventScroll: true });
+  });
+
   filterForm.addEventListener("submit", event => {
     event.preventDefault();
     scheduleFilters(0);
   });
   filterForm.addEventListener("change", event => {
+    if (event.target === modules) syncActivities();
     if (event.target !== search) scheduleFilters(0);
   });
-  search.addEventListener("input", event => {
+  search?.addEventListener("input", event => {
     if (!event.isComposing) scheduleFilters(300);
   });
-  search.addEventListener("compositionend", () => scheduleFilters(300));
+  search?.addEventListener("compositionend", () => scheduleFilters(300));
 }

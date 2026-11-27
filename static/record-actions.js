@@ -7,7 +7,6 @@ if (recordDialog?.showModal) {
   const loading = recordDialog.querySelector("[data-record-loading]");
   let opener;
   let busy = false;
-  let credentialsUrl;
 
   function closeRecord() {
     if (!busy) recordDialog.close();
@@ -21,10 +20,6 @@ if (recordDialog?.showModal) {
   });
   recordDialog.addEventListener("cancel", event => { if (busy) event.preventDefault(); });
   recordDialog.addEventListener("close", () => {
-    if (credentialsUrl) {
-      URL.revokeObjectURL(credentialsUrl);
-      credentialsUrl = undefined;
-    }
     content.replaceChildren();
     opener?.focus({ preventScroll: true });
   });
@@ -59,12 +54,15 @@ if (recordDialog?.showModal) {
       }
       if (form?.matches("[data-credentials-import]") &&
           response.headers.get("content-type")?.startsWith("application/vnd.openxmlformats-officedocument.spreadsheetml.sheet")) {
-        credentialsUrl = URL.createObjectURL(await response.blob());
-        const download = content.querySelector("[data-credentials-download]");
-        download.href = credentialsUrl;
-        form.hidden = true;
-        content.querySelector("[data-credentials-ready]").hidden = false;
-        download.focus();
+        const url = URL.createObjectURL(await response.blob());
+        const download = document.createElement("a");
+        download.href = url;
+        download.download = "paridad-credenciales.xlsx";
+        form.append(download);
+        download.click();
+        download.remove();
+        window.setTimeout(() => URL.revokeObjectURL(url), 30000);
+        recordDialog.close();
         document.querySelector("[data-auto-filters]")?.requestSubmit();
         return;
       }
@@ -84,6 +82,9 @@ if (recordDialog?.showModal) {
       recordDialog.setAttribute("aria-labelledby", title.id);
       title.focus();
       panel.dispatchEvent(new CustomEvent("paridad:record-opened", { bubbles: true }));
+      if (response.redirected && panel.hasAttribute("data-refresh-list")) {
+        document.querySelector("[data-auto-filters]")?.requestSubmit();
+      }
     } catch (failure) {
       error.textContent = failure.message;
       error.hidden = false;
@@ -123,7 +124,7 @@ if (recordDialog?.showModal) {
       showRecord(form.getAttribute("action"), submitter || form, new FormData(form, submitter));
     } else if (content.contains(form)) {
       event.preventDefault();
-      if (!busy) loadRecord(form.getAttribute("action"), new FormData(form), form);
+      if (!busy) loadRecord(form.getAttribute("action"), new FormData(form, submitter), form);
     }
   });
 }

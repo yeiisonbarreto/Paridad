@@ -152,6 +152,7 @@ def main():
         post(admin, "/admin/activities/modulos", admin_csrf, code=module_code, title="Módulo común")
         activities_page = assert_status(admin.get("/admin/activities/crear/actividad")).text
         module_id = re.search(r'<option value="(\d+)">' + module_code.upper() + r' ·', activities_page)[1]
+        assert 'name="similarity_threshold"' not in activities_page
         c_id = re.search(r'name="language_ids" value="([0-9]+)"\s*> C</label>', activities_page)[1]
         custom_id = re.search(r'name="language_ids" value="([0-9]+)"\s*> ' + language_code + "</label>", activities_page)[1]
         post(admin, "/admin/activities", admin_csrf, code=lab, title="Laboratorio común", language_ids=[c_id, custom_id],
@@ -194,7 +195,8 @@ def main():
         separate_id = delivery_id(module_page, separate_lab)
         deadline_id = delivery_id(module_page, deadline_lab)
         assert not any(concurrent_lab.upper() in option for option in re.findall(r'<option[^>]*>([^<]+)</option>', module_page))
-        assert re.search(rf'<option value="{deadline_id}" disabled>', module_page)
+        assert re.search(rf'href="/student/actividades/{deadline_id}/subir"[^>]*hidden', module_page)
+        assert "Programada" in module_page and "C (.c, .h)" in module_page
         deadline_route = f"/admin/activities/{deadline_id}"
         assert_status(first.get(deadline_route + "/editar"), 403)
         upload(second, second_csrf, deadline_id, c_id, "temprano.c", STYLE_CODE, status=400)
@@ -294,6 +296,12 @@ def main():
 
         filters = {"activity_id": activity_id, "language_id": c_id, "alerts_only": "true"}
         assert_status(first.get("/admin/reports/exportar", params=filters), 403)
+        post(admin, "/admin/reports/exportar", admin_csrf, 400, **filters)
+        dashboard = assert_status(admin.get("/admin", params=dict(scope_filters, module_id=module_id))).text
+        assert "Participación por actividad" in dashboard and "Promedio de notas" in dashboard
+        assert f'Estudiantes que entregaron en {lab.upper()}' in dashboard
+        assert 'value="2" aria-label="Estudiantes que entregaron' in dashboard
+        assert 'value="3" aria-label="Entregas con alerta de similitud"' in dashboard
         export = assert_status(admin.get("/admin/reports/exportar", params=filters))
         assert 'filename="paridad-informes.xlsx"' in export.headers["content-disposition"]
         workbook = load_workbook(BytesIO(export.content))
@@ -408,10 +416,13 @@ def main():
         assert "Solicitud recibida" in pending_thread["content"]
         assert "Resolución de Paridad" not in pending_thread["content"] and pending_thread["unread"] == 0
 
-        decision = f"/admin/submissions/{graded['id']}/aclaracion"
+        decision = f"/admin/aclaraciones/{graded['id']}"
+        assert_status(first.get(decision), 403)
+        assert "Verificar los comentarios" in assert_status(admin.get(decision)).text
         post(first, decision, first_csrf, 403, decision="resolved", response="Sin acceso")
         sent_decision = post(admin, decision, admin_csrf, decision="resolved", response="Comentario del docente", grade=42)
-        assert sent_decision.headers["location"].endswith("?respuesta=enviada#aclaracion")
+        assert sent_decision.headers["location"] == decision + "?respuesta=enviada"
+        assert "Respuesta publicada" in assert_status(admin.get(sent_decision.headers["location"])).text
         assert wait_result(first, "primero.c")["grade"] == 42
         assert "Comentario del docente" in assert_status(first.get(grade_url)).text
         assert "primero.c" not in assert_status(admin.get("/admin/aclaraciones")).text
@@ -453,6 +464,10 @@ def main():
             for task in tasks:
                 task.result()
         assert wait_result(first, "par-uno.c", 10000)["similarity_alert"]
+        restricted = assert_status(first.get("/student", params={"module_id": concurrent_module})).text
+        assert "par-uno.c" in restricted and "primero.c" not in restricted
+        combined = assert_status(first.get("/student", params={"module_id": concurrent_module, "historial": "todos"})).text
+        assert "par-uno.c" in combined and "primero.c" in combined
         assert wait_result(second, "par-dos.c", 10000)["similarity_alert"]
         concurrent_report = admin.get("/admin/reports", params={"activity_id": concurrent_id, "language_id": c_id, "vista": "comparaciones"})
         assert len(PAIR_LINK.findall(assert_status(concurrent_report).text)) == 1
@@ -485,6 +500,8 @@ def main():
         post(admin, f"/admin/activities/{activity_id}", admin_csrf, language_ids=[c_id, custom_id],
              title="Laboratorio común", is_open="true", similarity_threshold=40)
         assert wait_result(first, "primero.c", 10000)["similarity_alert"]
+        post(admin, "/admin/settings", admin_csrf, similarity_threshold=100, ai_threshold=30)
+        assert not wait_result(first, "primero.c", 10000)["similarity_alert"]
         post(admin, "/admin/settings", admin_csrf, similarity_threshold=40, ai_threshold=30)
 
         upload(first, first_csrf, activity_id, c_id, "otro.exe", STYLE_CODE, status=400)

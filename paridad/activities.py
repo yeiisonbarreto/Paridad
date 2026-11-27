@@ -161,7 +161,6 @@ def update_languages(conn, activity_id: int, language_ids: list[int]) -> None:
 @router.post("")
 def create_activity(
     request: Request, csrf: Csrf, code: Code, title: Name, language_ids: LanguageIds,
-    similarity_threshold: ThresholdValue = "", ai_threshold: ThresholdValue = "",
     module_id: ModuleId = None, opens_at: WindowValue = "", closes_at: WindowValue = "",
 ):
     try:
@@ -179,10 +178,9 @@ def create_activity(
             else:
                 module_record(conn, module_id)
             row = conn.execute(
-                """INSERT INTO activities (module_id, code, title, similarity_threshold, ai_threshold, opens_at, closes_at)
-                   VALUES (%s, %s, %s, %s, %s, %s, %s) RETURNING id""",
-                (module_id, code, title, optional_threshold(similarity_threshold), optional_threshold(ai_threshold),
-                 start, end),
+                """INSERT INTO activities (module_id, code, title, opens_at, closes_at)
+                   VALUES (%s, %s, %s, %s, %s) RETURNING id""",
+                (module_id, code, title, start, end),
             ).fetchone()
             update_languages(conn, row["id"], language_ids)
     except errors.UniqueViolation:

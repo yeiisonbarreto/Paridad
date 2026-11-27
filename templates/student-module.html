@@ -1,67 +1,32 @@
-{% from "macros.html" import csrf %}
 {% from "activity-components.html" import delivery_badge %}
-<section class="card stack student-module-panel" data-record-panel>
-  <header class="module-dialog-heading">
-    <h1>{{ chosen.code|upper }} · {{ chosen.title }}</h1>
-    <a href="/student" class="button secondary compact-button" data-record-close>Cerrar</a>
-  </header>
-  <div class="delivery-selection" data-server-time="{{ now.timestamp() }}">
-    <ul class="student-delivery-list">
-      {% for delivery in deliveries %}
-      <li data-delivery-id="{{ delivery.id }}" data-accepting="{{ 'true' if delivery.is_open else 'false' }}"
-          data-opens="{{ delivery.opens_at.timestamp() if delivery.opens_at else '' }}"
-          data-closes="{{ delivery.closes_at.timestamp() if delivery.closes_at else '' }}">
-        <div class="record-row">
-          <span class="record-summary-text">{{ delivery.code|upper }}<small>{{ delivery.title }}</small></span>
-          {{ delivery_badge(delivery.status) }}
-        </div>
-        {% if delivery.opens_at and delivery.status == 'scheduled' %}
-        <small class="table-detail">Apertura <time datetime="{{ delivery.opens_at.isoformat() }}">{{ delivery.opens_at|date_label }}</time></small>
+<div class="delivery-selection" data-student-module data-server-time="{{ now.timestamp() }}">
+  <h3>{{ chosen.code|upper }} · {{ chosen.title }}</h3>
+  <ul class="student-delivery-list">
+    {% for delivery in deliveries %}
+    <li data-delivery-id="{{ delivery.id }}" data-accepting="{{ 'true' if delivery.is_open else 'false' }}"
+        data-opens="{{ delivery.opens_at.timestamp() if delivery.opens_at else '' }}"
+        data-closes="{{ delivery.closes_at.timestamp() if delivery.closes_at else '' }}">
+      <div class="record-row">
+        <span class="record-summary-text">{{ delivery.code|upper }}<small>{{ delivery.title }}</small></span>
+        {{ delivery_badge(delivery.status) }}
+      </div>
+      {% if delivery.formats %}<small class="table-detail">{{ delivery.formats|join(' · ') }}</small>{% endif %}
+      {% if delivery.opens_at and delivery.status == 'scheduled' %}
+      <small class="table-detail">Apertura <time datetime="{{ delivery.opens_at.isoformat() }}">{{ delivery.opens_at|date_label }}</time></small>
+      {% endif %}
+      {% if delivery.closes_at %}
+      <small class="table-detail">Cierre <time datetime="{{ delivery.closes_at.isoformat() }}">{{ delivery.closes_at|date_label }}</time></small>
+      {% endif %}
+      <div class="delivery-card-actions">
+        <small class="delivery-countdown" data-countdown>{% if delivery.status == 'open' and not delivery.closes_at %}Sin fecha límite{% endif %}</small>
+        {% if upload_count < upload_limit and delivery.formats %}
+        <a href="/student/actividades/{{ delivery.id }}/subir" class="button compact-button" data-record-action
+           data-upload-link aria-haspopup="dialog" aria-label="Subir archivo a {{ delivery.code|upper }}"
+           {% if delivery.status != 'open' %}hidden{% endif %}>Subir archivo</a>
         {% endif %}
-        {% if delivery.closes_at %}
-        <small class="table-detail">Cierre <time datetime="{{ delivery.closes_at.isoformat() }}">{{ delivery.closes_at|date_label }}</time></small>
-        {% endif %}
-        <small class="delivery-countdown" data-countdown>
-          {% if delivery.status == 'open' and not delivery.closes_at %}Sin fecha límite{% endif %}
-        </small>
-      </li>
-      {% endfor %}
-    </ul>
-  </div>
-  {% if upload_count >= upload_limit %}<p class="muted">Alcanzaste el máximo de tres archivos.</p>
-  {% elif activities %}
-  <h2 class="delivery-heading">Subir archivo</h2>
-  <form action="/student/submissions" method="post" enctype="multipart/form-data" class="stack" id="submission-form">
-    {{ csrf(user) }}
-    <input type="hidden" name="request_id" value="{{ request_id }}">
-    <div class="field">
-      <label for="activity">Actividad</label>
-      <select name="activity_id" required id="activity">
-        <option value="">Selecciona la actividad</option>
-        {% for id, delivery in activities.items() %}
-        <option value="{{ id }}"{% if delivery.status != 'open' %} disabled{% endif %}>{{ delivery.code|upper }} · {{ delivery.title }}</option>
-        {% endfor %}
-      </select>
-    </div>
-    <div class="field">
-      <label for="language">Lenguaje</label>
-      <select name="language_id" required id="language">
-        <option value="">Selecciona el lenguaje</option>
-        {% for id, language in languages.items() %}
-        <option value="{{ id }}" data-activities="{{ language.activities|join(' ') }}"
-                data-extensions="{{ language.extensions }}">{{ language.name }} ({{ language.extensions }})</option>
-        {% endfor %}
-      </select>
-    </div>
-    <label>Archivo de código
-      <input type="file" name="file" id="source" required aria-describedby="file-help">
-    </label>
-    <p class="field-help" id="file-help">Texto UTF-8 de hasta 128 KiB y 8000 tokens. Incluye comentarios que expliquen las decisiones de tu código. {{ upload_count }} de {{ upload_limit }} archivos subidos.</p>
-    <label class="check"><input type="checkbox" name="ai_declared" id="ai-declared" value="true"> Usé una herramienta de IA</label>
-    <label class="credit-field">Crédito de IA
-      <textarea name="ai_credit" id="ai-credit" maxlength="1000" rows="3" placeholder="Herramienta y tipo de ayuda"></textarea>
-    </label>
-    <button type="submit" class="button">Enviar a análisis</button>
-  </form>
-  {% else %}<p class="muted">Este módulo no admite entregas en este momento.</p>{% endif %}
-</section>
+      </div>
+    </li>
+    {% endfor %}
+  </ul>
+  {% if upload_count >= upload_limit %}<p class="muted">Alcanzaste el máximo de tres archivos.</p>{% endif %}
+</div>

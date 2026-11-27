@@ -108,6 +108,22 @@ def pending_clarifications(request: Request):
     return {"pending": user["pending_clarifications"]}
 
 
+@router.get("/admin/aclaraciones/{submission_id}")
+def clarification_detail(request: Request, submission_id: UUID, respuesta: Literal["enviada"] | None = None):
+    with request.app.state.pool.connection() as conn:
+        user = administrator(conn, request)
+        grade = get_grade(conn, submission_id)
+        if not grade["clarification_status"]:
+            raise HTTPException(404, "Solicitud no encontrada.")
+        student = conn.execute(
+            """SELECT u.display_name, u.username FROM submissions s JOIN users u ON u.id = s.student_id
+               WHERE s.id = %s""", (submission_id,),
+        ).fetchone()
+    return view(request, "clarification-detail.html", user=user, grade=grade, student=student,
+                sent=respuesta == "enviada")
+
+
+@router.post("/admin/aclaraciones/{submission_id}")
 @router.post("/admin/submissions/{submission_id}/aclaracion")
 def decide_clarification(
     request: Request, submission_id: UUID, csrf: Csrf,
@@ -134,6 +150,8 @@ def decide_clarification(
             conn.execute("UPDATE submissions SET grade_override = %s, grade_note = %s WHERE id = %s",
                          (grade, explanation, submission_id))
         publish_clarification(conn, submission_id)
+    if request.url.path.startswith("/admin/aclaraciones/"):
+        return redirect(f"/admin/aclaraciones/{submission_id}?respuesta=enviada")
     return redirect(f"/admin/submissions/{submission_id}?respuesta=enviada#aclaracion")
 
 

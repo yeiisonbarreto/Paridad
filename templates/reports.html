@@ -29,9 +29,9 @@
       <input type="hidden" name="language_id" value="{{ selected_language or '' }}">
       <input type="hidden" name="q" value="{{ q }}">
       {% if alerts_only %}<input type="hidden" name="alerts_only" value="true">{% endif %}
-      {{ bulk_controls('Todos los archivos del filtro', [('notice', 'Enviar aviso')]) }}
+      {{ bulk_controls('Todos', [('notice', 'Enviar aviso')], show_page=false) }}
     </form>
-    <button type="submit" form="report-selection" formaction="/admin/reports/exportar" class="button">Descargar Excel</button>
+    <button type="submit" form="report-selection" formaction="/admin/reports/exportar" class="button" disabled>Descargar Excel</button>
   </div>
   {% endif %}
   {{ submission_table(rows, user, selection_form='report-selection') }}

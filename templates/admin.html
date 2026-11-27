@@ -1,23 +1,89 @@
 {% extends "base.html" %}
-{% from "macros.html" import csrf, thresholds %}
+{% from "macros.html" import csrf, thresholds, filter_status %}
 {% block title %}Panel · Paridad{% endblock %}
+{% macro percent_of(count, total) %}{{ ((count * 100 / total)|round(1)|string|replace('.', ',')) if total else '0' }} %{% endmacro %}
 {% block content %}
-<div class="page-heading"><h1>Panel de administración</h1><p>{{ user.display_name }}</p></div>
-<div class="stats">
-  <a class="card stat" href="/admin/accounts"><span class="stat-label">Cuentas de estudiantes</span><span class="stat-value">{{ totals.students }}</span></a>
-  <a class="card stat" href="/admin/activities"><span class="stat-label">Actividades abiertas</span><span class="stat-value">{{ totals.activities }}</span></a>
-  <a class="card stat" href="/admin/reports"><span class="stat-label">Entregas en análisis</span><span class="stat-value">{{ totals.pending }}</span></a>
-  <a class="card stat" href="/admin/reports"><span class="stat-label">Análisis fallidos</span><span class="stat-value">{{ totals.failed }}</span></a>
+<div class="page-heading grade-heading">
+  <h1>Panel de administración</h1>
+  <a href="/admin/settings" class="button secondary" data-record-action aria-haspopup="dialog">Umbrales globales</a>
 </div>
-<details class="card narrow panel-disclosure">
-  <summary>Umbrales globales</summary>
-  <div class="disclosure-content">
-    <p class="muted">La alerta se activa al superar el umbral. Puedes ajustar cada actividad por separado.</p>
-    <form action="/admin/settings" method="post" class="stack">
-      {{ csrf(user) }}
-      {{ thresholds(settings.similarity_threshold, settings.ai_threshold, true) }}
-      <button type="submit" class="button">Guardar umbrales</button>
-    </form>
+<section class="card" aria-label="Filtros del panel">
+  <form action="/admin" method="get" class="filters dashboard-filters" data-auto-filters>
+    <label>Módulo
+      <select name="module_id">
+        <option value="">Todos</option>
+        {% for item in modules %}<option value="{{ item.id }}"{% if selected_module == item.id %} selected{% endif %}>{{ item.code|upper }} · {{ item.title }}</option>{% endfor %}
+      </select>
+    </label>
+    <label>Actividad
+      <select name="activity_id">
+        <option value="">Todas</option>
+        {% for item in activities %}<option value="{{ item.id }}" data-module="{{ item.module_id }}"{% if selected_activity == item.id %} selected{% endif %}>{{ item.code|upper }}</option>{% endfor %}
+      </select>
+    </label>
+    <label>Lenguaje
+      <select name="language_id">
+        <option value="">Todos</option>
+        {% for item in languages %}<option value="{{ item.id }}"{% if selected_language == item.id %} selected{% endif %}>{{ item.name }}</option>{% endfor %}
+      </select>
+    </label>
+    {{ filter_status() }}
+  </form>
+</section>
+
+<div data-filter-results>
+  <div class="stats section-gap" aria-label="Resumen de entregas">
+    <a class="card stat" href="/admin/accounts"><span class="stat-label">Estudiantes inscritos</span><span class="stat-value">{{ totals.enrolled }}</span></a>
+    <div class="card stat"><span class="stat-label">Estudiantes que entregaron</span><span class="stat-value">{{ totals.participants }}</span>
+      <span class="stat-label">{{ percent_of(totals.participants, totals.enrolled) }} de inscritos</span></div>
+    <div class="card stat"><span class="stat-label">Entregas</span><span class="stat-value">{{ totals.submissions }}</span>
+      <span class="stat-label">{{ totals.pending }} en análisis · {{ totals.failed }} fallidas</span></div>
+    <div class="card stat"><span class="stat-label">Promedio de notas</span>
+      <span class="stat-value">{{ (totals.grade_mean|string|replace('.', ',')) ~ ' / 50' if totals.grade_mean is not none else '—' }}</span>
+      <span class="stat-label">{{ totals.graded }} entregas con nota</span>
+      {% if totals.grade_mean is not none %}
+      <div class="chart-row"><meter max="50" value="{{ totals.grade_mean }}" aria-label="Nota promedio sobre 50"></meter></div>
+      {% endif %}
+    </div>
   </div>
-</details>
+  <div class="dashboard-charts">
+    <section class="card" aria-labelledby="participation-heading">
+      <h2 id="participation-heading">Participación por {{ 'actividad' if selected_module or selected_activity else 'módulo' }}</h2>
+      {% if participation %}
+      <ul class="chart-list">
+        {% for item in participation %}
+        <li class="chart-row">
+          <div class="chart-label">
+            {% if selected_module or selected_activity %}
+            <span>{{ item.code|upper }} · {{ item.title }}</span>
+            {% else %}
+            <a href="/admin?module_id={{ item.id }}{% if selected_language %}&amp;language_id={{ selected_language }}{% endif %}"
+               data-dashboard-module="{{ item.id }}">{{ item.code|upper }} · {{ item.title }}</a>
+            {% endif %}
+            <span>{{ item.students }} de {{ totals.enrolled }} · {{ percent_of(item.students, totals.enrolled) }}</span>
+          </div>
+          <meter max="{{ totals.enrolled or 1 }}" value="{{ item.students }}" aria-label="Estudiantes que entregaron en {{ item.code|upper }}"></meter>
+        </li>
+        {% endfor %}
+      </ul>
+      {% else %}<p class="empty">Sin módulos o actividades para estos filtros.</p>{% endif %}
+    </section>
+    <section class="card" aria-labelledby="analysis-heading">
+      <h2 id="analysis-heading">Alertas de integridad</h2>
+      <p class="muted">{{ totals.analyzed }} entregas analizadas</p>
+      <ul class="chart-list">
+        <li class="chart-row">
+          <div class="chart-label"><span>Similitud sobre el umbral</span><span>{{ totals.similarity_alerts }} · {{ percent_of(totals.similarity_alerts, totals.analyzed) }}</span></div>
+          <meter max="{{ totals.analyzed or 1 }}" value="{{ totals.similarity_alerts }}" aria-label="Entregas con alerta de similitud"></meter>
+          {% if totals.similarity_mean is not none %}<small class="table-detail">Similitud media {{ totals.similarity_mean|string|replace('.', ',') }} %</small>{% endif %}
+        </li>
+        <li class="chart-row">
+          <div class="chart-label"><span>Indicio de IA sin declarar</span><span>{{ totals.ai_alerts }} · {{ percent_of(totals.ai_alerts, totals.analyzed) }}</span></div>
+          <meter max="{{ totals.analyzed or 1 }}" value="{{ totals.ai_alerts }}" aria-label="Entregas con alerta de IA"></meter>
+          {% if totals.ai_mean is not none %}<small class="table-detail">Indicio medio {{ totals.ai_mean|string|replace('.', ',') }} %</small>{% endif %}
+        </li>
+      </ul>
+    </section>
+  </div>
+</div>
 {% endblock %}

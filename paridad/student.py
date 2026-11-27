@@ -4,7 +4,7 @@ import re
 import unicodedata
 from datetime import datetime
 from pathlib import PurePosixPath
-from typing import Annotated
+from typing import Annotated, Literal
 from uuid import UUID, uuid4
 
 from fastapi import APIRouter, File, Form, HTTPException, Query, Request, UploadFile
@@ -38,7 +38,7 @@ class OwnResult(BaseModel):
     ai_declared: bool
 
 
-def owned_history(conn, student_id: int, page: int):
+def owned_history(conn, student_id: int, page: int, module_id: int | None = None):
     rows = conn.execute(
         """SELECT s.id, s.filename, a.code AS activity, l.name AS language, s.created_at,
                   COALESCE(s.grade_override, s.automatic_grade) AS grade, c.status AS clarification_status,
@@ -48,8 +48,9 @@ def owned_history(conn, student_id: int, page: int):
            FROM submissions s JOIN activities a ON a.id = s.activity_id
            JOIN languages l ON l.id = s.language_id LEFT JOIN grade_clarifications c ON c.submission_id = s.id
            CROSS JOIN settings cfg
-           WHERE s.student_id = %s ORDER BY s.created_at DESC, s.id DESC LIMIT %s OFFSET %s""",
-        (student_id, PAGE_SIZE + 1, (page - 1) * PAGE_SIZE),
+           WHERE s.student_id = %s AND (%s::bigint IS NULL OR a.module_id = %s)
+           ORDER BY s.created_at DESC, s.id DESC LIMIT %s OFFSET %s""",
+        (student_id, module_id, module_id, PAGE_SIZE + 1, (page - 1) * PAGE_SIZE),
     ).fetchall()
     return [
         OwnResult(
@@ -69,6 +70,7 @@ def owned_history(conn, student_id: int, page: int):
 def dashboard(
     request: Request, page: Annotated[int, Query(ge=1, le=10000)] = 1,
     module_id: Annotated[int | None, Query(gt=0, lt=2**63)] = None,
+    historial: Literal["modulo", "todos"] = "modulo", entrega: Literal["recibida"] | None = None,
 ):
     with request.app.state.pool.connection() as conn:
         user = auth_user(conn, request, "STUDENT")
@@ -77,37 +79,50 @@ def dashboard(
                ORDER BY m.code""",
         ).fetchall()
         chosen = next((module for module in modules if module["id"] == module_id), None)
-        deliveries = conn.execute(
-            "SELECT * FROM activities WHERE module_id = %s ORDER BY code", (module_id,),
-        ).fetchall() if chosen else []
-        scopes = conn.execute(
-            """SELECT al.activity_id, l.id AS language_id, l.name, l.extensions
-               FROM activity_languages al JOIN activities a ON a.id = al.activity_id
-               JOIN languages l ON l.id = al.language_id WHERE a.module_id = %s ORDER BY l.name""",
-            (module_id,),
-        ).fetchall() if chosen else []
         now = database_time(conn)
-        results, has_next = owned_history(conn, user["id"], page)
-        upload_count = conn.execute(
-            "SELECT count(*) AS total FROM submissions WHERE student_id = %s", (user["id"],),
-        ).fetchone()["total"]
-    activities, languages = {}, {}
-    for delivery in deliveries:
-        delivery["status"] = delivery_status(delivery, now)
-        if delivery["status"] in {"open", "scheduled"}:
-            activities[delivery["id"]] = delivery
-    for scope in scopes:
-        activity_id, language_id = scope["activity_id"], scope["language_id"]
-        if activity_id in activities:
-            entry = languages.setdefault(language_id, {
-                "name": scope["name"], "extensions": ", ".join(scope["extensions"]), "activities": [],
-            })
-            entry["activities"].append(str(activity_id))
+        deliveries = conn.execute(
+            """SELECT a.*, ARRAY(
+                   SELECT l.name || ' (' || array_to_string(l.extensions, ', ') || ')'
+                   FROM activity_languages al JOIN languages l ON l.id = al.language_id
+                   WHERE al.activity_id = a.id ORDER BY l.name) AS formats
+               FROM activities a WHERE a.module_id = %s ORDER BY a.code""", (module_id,),
+        ).fetchall() if chosen else []
+        for delivery in deliveries:
+            delivery["status"] = delivery_status(delivery, now)
+        history_module = chosen["id"] if chosen and historial == "modulo" else None
+        results, has_next = owned_history(conn, user["id"], page, history_module)
+        count = upload_count(conn, user["id"])
     return view(
         request, "student.html", user=user, modules=modules, chosen=chosen, deliveries=deliveries, now=now,
-        activities=activities, languages=languages, results=results, upload_count=upload_count,
-        upload_limit=MAX_STUDENT_FILES, deterrence=CLIENT_DETERRENCE, page=page, has_next=has_next, request_id=uuid4(),
+        results=results, upload_count=count, upload_limit=MAX_STUDENT_FILES, deterrence=CLIENT_DETERRENCE,
+        page=page, has_next=has_next, history_module=history_module, received=entrega == "recibida",
     )
+
+
+def upload_count(conn, student_id: int) -> int:
+    return conn.execute("SELECT count(*) AS total FROM submissions WHERE student_id = %s",
+                        (student_id,)).fetchone()["total"]
+
+
+@router.get("/student/actividades/{activity_id}/subir")
+def upload_form(request: Request, activity_id: int):
+    with request.app.state.pool.connection() as conn:
+        user = auth_user(conn, request, "STUDENT")
+        activity = None
+        if 0 < activity_id < 2**63:
+            activity = conn.execute("SELECT * FROM activities WHERE id = %s", (activity_id,)).fetchone()
+        if activity is None:
+            raise HTTPException(404, "Actividad no encontrada.")
+        now = database_time(conn)
+        languages = conn.execute(
+            """SELECT l.id, l.name, l.extensions FROM activity_languages al
+               JOIN languages l ON l.id = al.language_id WHERE al.activity_id = %s ORDER BY l.name""",
+            (activity_id,),
+        ).fetchall()
+        count = upload_count(conn, user["id"])
+    activity["status"] = delivery_status(activity, now)
+    return view(request, "student-upload.html", user=user, activity=activity, languages=languages, now=now,
+                upload_count=count, upload_limit=MAX_STUDENT_FILES, request_id=uuid4())
 
 
 @router.get("/api/student/submissions")
@@ -165,12 +180,14 @@ def submit(
             "SELECT id FROM users WHERE id = %s AND active FOR NO KEY UPDATE", (user_id,),
         ).fetchone():
             raise HTTPException(403, "La cuenta está inhabilitada.")
-        if conn.execute(
-            "SELECT 1 FROM submissions WHERE student_id = %s AND request_id = %s", (user_id, request_id),
-        ).fetchone():
-            return redirect("/student")
+        previous = conn.execute(
+            """SELECT a.module_id FROM submissions s JOIN activities a ON a.id = s.activity_id
+               WHERE s.student_id = %s AND s.request_id = %s""", (user_id, request_id),
+        ).fetchone()
+        if previous:
+            return redirect(f"/student?module_id={previous['module_id']}&entrega=recibida")
         activity = conn.execute(
-            "SELECT is_open, opens_at, closes_at FROM activities WHERE id = %s FOR SHARE", (activity_id,)
+            "SELECT module_id, is_open, opens_at, closes_at FROM activities WHERE id = %s FOR SHARE", (activity_id,)
         ).fetchone()
         if not activity or not activity["is_open"]:
             raise HTTPException(400, "La actividad no admite entregas.")
@@ -188,10 +205,7 @@ def submit(
             tokenize(source, scope["profile"], scope["options"])
         except ValueError as exc:
             raise HTTPException(400, str(exc)) from None
-        own_count = conn.execute(
-            "SELECT count(*) AS total FROM submissions WHERE student_id = %s", (user_id,),
-        ).fetchone()["total"]
-        if own_count >= MAX_STUDENT_FILES:
+        if upload_count(conn, user_id) >= MAX_STUDENT_FILES:
             raise HTTPException(409, "Alcanzaste el máximo de tres archivos.")
         count = conn.execute(
             "SELECT count(*) AS total FROM submissions WHERE activity_id = %s AND language_id = %s",
@@ -205,7 +219,7 @@ def submit(
                VALUES (%s, %s, %s, %s, %s, %s, %s, %s) ON CONFLICT (student_id, request_id) DO NOTHING""",
             (activity_id, language_id, user_id, request_id, filename, source, source_bytes, ai_credit or None),
         )
-    return redirect("/student")
+    return redirect(f"/student?module_id={activity['module_id']}&entrega=recibida")
 
 
 def check_delivery_window(activity: dict, now: datetime) -> None:

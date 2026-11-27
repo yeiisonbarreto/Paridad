@@ -1,0 +1,48 @@
+{% extends "base.html" %}
+{% from "macros.html" import csrf %}
+{% from "activity-components.html" import delivery_badge %}
+{% block title %}Subir archivo · Paridad{% endblock %}
+{% block content %}
+<section class="card narrow stack student-module-panel" data-record-panel data-student-module>
+  <header class="module-dialog-heading">
+    <h1>Subir archivo</h1>
+    <a href="/student?module_id={{ activity.module_id }}" class="button secondary compact-button" data-record-close>Cancelar</a>
+  </header>
+  <div class="delivery-selection" data-server-time="{{ now.timestamp() }}">
+    <div data-delivery-id="{{ activity.id }}" data-accepting="{{ 'true' if activity.is_open else 'false' }}"
+         data-opens="{{ activity.opens_at.timestamp() if activity.opens_at else '' }}"
+         data-closes="{{ activity.closes_at.timestamp() if activity.closes_at else '' }}">
+      <div class="record-row">
+        <span class="record-summary-text">{{ activity.code|upper }} · {{ activity.title }}</span>
+        {{ delivery_badge(activity.status) }}
+      </div>
+      <small class="delivery-countdown" data-countdown></small>
+    </div>
+  </div>
+  {% if upload_count >= upload_limit %}<p class="muted">Alcanzaste el máximo de tres archivos.</p>
+  {% elif activity.status == 'open' and languages %}
+  <form action="/student/submissions" method="post" enctype="multipart/form-data" class="stack" id="submission-form">
+    {{ csrf(user) }}
+    <input type="hidden" name="request_id" value="{{ request_id }}">
+    <input type="hidden" name="activity_id" value="{{ activity.id }}">
+    <label>Lenguaje
+      <select name="language_id" required id="language">
+        {% if languages|length > 1 %}<option value="">Selecciona el lenguaje</option>{% endif %}
+        {% for language in languages %}
+        <option value="{{ language.id }}" data-extensions="{{ language.extensions|join(', ') }}">{{ language.name }} ({{ language.extensions|join(', ') }})</option>
+        {% endfor %}
+      </select>
+    </label>
+    <label>Archivo de código
+      <input type="file" name="file" id="source" required aria-describedby="file-help">
+    </label>
+    <p class="field-help" id="file-help">Texto UTF-8 de hasta 128 KiB y 8000 tokens. {{ upload_count }} de {{ upload_limit }} archivos subidos.</p>
+    <label class="check"><input type="checkbox" name="ai_declared" id="ai-declared" value="true"> Usé una herramienta de IA</label>
+    <label class="credit-field">Crédito de IA
+      <textarea name="ai_credit" id="ai-credit" maxlength="1000" rows="3" placeholder="Herramienta y tipo de ayuda"></textarea>
+    </label>
+    <button type="submit" class="button">Enviar a análisis</button>
+  </form>
+  {% else %}<p class="muted">Esta actividad no admite entregas en este momento.</p>{% endif %}
+</section>
+{% endblock %}

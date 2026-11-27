@@ -27,8 +27,8 @@
     <label class="check"><input type="checkbox" name="language_ids" value="{{ language.id }}"{% if activity and language.id in activity.language_ids %} checked{% endif %}> {{ language.name }}</label>
     {% endfor %}
   </fieldset>
-  {{ thresholds(activity.similarity_threshold, activity.ai_threshold) if activity else thresholds() }}
   {% if activity %}
+  {{ thresholds(activity.similarity_threshold, activity.ai_threshold) }}
   <label class="check"><input type="checkbox" name="is_open" value="true"{% if activity.is_open %} checked{% endif %}> Aceptar nuevas entregas según el plazo</label>
   {% endif %}
 {% endmacro %}

@@ -14,7 +14,7 @@
     <nav class="module-links" aria-label="Módulos de entrega">
       {% for module in modules %}
       <a href="/student?module_id={{ module.id }}" class="button secondary compact-button"
-         data-record-action aria-haspopup="dialog"{% if chosen and chosen.id == module.id %} aria-current="page"{% endif %}>
+         {% if chosen and chosen.id == module.id %} aria-current="page"{% endif %}>
         {{ module.code|upper }}<span class="screen-reader-only"> · {{ module.title }}</span>
       </a>
       {% endfor %}
@@ -23,7 +23,15 @@
     {% if chosen %}{% include "student-module.html" %}{% endif %}
   </section>
   <section class="card history" aria-labelledby="history-heading">
-    <h2 id="history-heading">Historial</h2>
+    <div class="module-dialog-heading history-heading">
+      <h2 id="history-heading">Historial</h2>
+      {% if chosen %}
+      <nav class="module-links" aria-label="Alcance del historial">
+        <a href="/student?module_id={{ chosen.id }}" class="button secondary compact-button"{% if history_module %} aria-current="page"{% endif %}>Este módulo</a>
+        <a href="/student?module_id={{ chosen.id }}&amp;historial=todos" class="button secondary compact-button"{% if not history_module %} aria-current="page"{% endif %}>Todos los módulos</a>
+      </nav>
+      {% endif %}
+    </div>
     <p class="muted">La similitud puede actualizarse cuando se analizan nuevas entregas. El indicio de IA es orientativo.</p>
     <div id="own-history"{% if deterrence %} class="deterrence" data-deterrence{% endif %}>
       {% if results %}
@@ -58,7 +66,13 @@
       </div>
       {% else %}<p class="empty">Aún no tienes archivos en esta página del historial.</p>{% endif %}
     </div>
-    {{ pagination('/student', page, has_next, '&module_id=' ~ chosen.id if chosen else '') }}
+    {{ pagination('/student', page, has_next, ('&module_id=' ~ chosen.id ~ ('&historial=todos' if not history_module else '')) if chosen else '') }}
   </section>
 </div>
+{% if received %}
+<div class="submission-success" role="status" data-submission-success>
+  <span class="success-mark" aria-hidden="true">✓</span>
+  <p><strong>¡Entrega recibida!</strong><span>Paridad está analizando tu archivo.</span></p>
+</div>
+{% endif %}
 {% endblock %}

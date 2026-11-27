@@ -8,6 +8,10 @@
     <h2 id="account-tools">Agregar estudiantes</h2>
     <div class="stack creation-buttons">
       <a href="/admin/accounts/herramientas/importar" class="button secondary" data-record-action aria-haspopup="dialog">Importar estudiantes</a>
+      <div class="roster-guide">
+        <p class="muted">Completa ID, Nombre y Correo. Guarda los IDs con ceros iniciales como texto.</p>
+        <a href="/admin/accounts/plantilla">Descargar plantilla Excel</a>
+      </div>
       <a href="/admin/accounts/herramientas/crear" class="button secondary" data-record-action aria-haspopup="dialog">Crear cuenta individual</a>
     </div>
   </aside>
@@ -22,7 +26,7 @@
     <form action="/admin/accounts/lote" method="post" id="account-selection" class="bulk-toolbar" data-bulk-selection data-record-submit="delete">
       {{ csrf(user) }}
       <input type="hidden" name="q" value="{{ q }}">
-      {{ bulk_controls('Todas', [('disable', 'Inhabilitar'), ('enable', 'Reactivar'), ('delete', 'Eliminar')], show_page=false) }}
+      {{ bulk_controls('Todos', [('disable', 'Inhabilitar'), ('enable', 'Reactivar'), ('delete', 'Eliminar')], show_page=false) }}
     </form>
     {% endif %}
     {% for student in students %}

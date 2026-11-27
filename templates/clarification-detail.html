@@ -1,0 +1,17 @@
+{% extends "base.html" %}
+{% from "grade-components.html" import clarification_content, clarification_response %}
+{% block title %}Aclaración · Paridad{% endblock %}
+{% block content %}
+<section class="card narrow stack" data-record-panel data-record-keep-open data-refresh-list>
+  <header class="module-dialog-heading">
+    <h1>Aclaración</h1>
+    <a href="/admin/aclaraciones" class="button secondary compact-button" data-record-close>Cerrar</a>
+  </header>
+  <p class="muted">{{ student.display_name }} ({{ student.username }}) · {{ grade.filename }} · {{ grade.activity|upper }}</p>
+  {% if sent and grade.response %}<p class="callout" role="status">Respuesta publicada en el hilo de Paridad.</p>{% endif %}
+  <div class="clarification-detail">
+    {{ clarification_content(grade) }}
+  </div>
+  {{ clarification_response(grade, user, '/admin/aclaraciones/' ~ grade.id) }}
+</section>
+{% endblock %}

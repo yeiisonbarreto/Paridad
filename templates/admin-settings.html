@@ -1,0 +1,17 @@
+{% extends "base.html" %}
+{% from "macros.html" import csrf, thresholds %}
+{% block title %}Umbrales globales · Paridad{% endblock %}
+{% block content %}
+<section class="card narrow stack" data-record-panel>
+  <h1>Umbrales globales</h1>
+  <p class="muted">Al guardar, estos valores se aplican a todas las actividades y se sustituyen sus ajustes particulares. Después puedes ajustar una actividad desde su módulo.</p>
+  <form action="/admin/settings" method="post" class="stack">
+    {{ csrf(user) }}
+    {{ thresholds(settings.similarity_threshold, settings.ai_threshold, true) }}
+    <div class="notice-dialog-actions">
+      <a href="/admin" class="button secondary" data-record-close>Cancelar</a>
+      <button type="submit" class="button">Guardar umbrales</button>
+    </div>
+  </form>
+</section>
+{% endblock %}

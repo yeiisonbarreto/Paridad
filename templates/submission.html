@@ -1,6 +1,6 @@
 {% extends "base.html" %}
 {% from "macros.html" import csrf %}
-{% from "grade-components.html" import grade_breakdown, clarification_content %}
+{% from "grade-components.html" import grade_breakdown, clarification_content, clarification_response %}
 {% block title %}{{ submission.filename }} · Paridad{% endblock %}
 {% block content %}
 <div class="page-heading">
@@ -66,21 +66,7 @@
     <p class="callout" role="status">Respuesta publicada en el hilo de Paridad.</p>
     {% endif %}
     {{ clarification_content(grade) }}
-    {% if grade.clarification_status == 'pending' %}
-    <form class="stack" action="/admin/submissions/{{ grade.id }}/aclaracion" method="post">
-      {{ csrf(user) }}
-      <label>Respuesta al estudiante
-        <textarea name="response" rows="4" maxlength="1500" required></textarea>
-      </label>
-      <label>Nueva nota (opcional)
-        <input type="number" name="grade" min="0" max="50">
-      </label>
-      <div class="filter-actions">
-        <button class="button" name="decision" value="resolved" type="submit">Enviar resolución</button>
-        <button class="button secondary" name="decision" value="rejected" type="submit">Enviar rechazo</button>
-      </div>
-    </form>
-    {% endif %}
+    {{ clarification_response(grade, user, '/admin/submissions/' ~ grade.id ~ '/aclaracion') }}
   </section>
   {% endif %}
 </div>

@@ -1,6 +1,5 @@
 """Administrative reports, grouped similarities and file management."""
 
-import re
 from typing import Annotated, Literal
 from urllib.parse import quote
 from uuid import UUID
@@ -8,7 +7,7 @@ from uuid import UUID
 from fastapi import APIRouter, Form, HTTPException, Query, Request
 from starlette.responses import JSONResponse, Response, StreamingResponse
 
-from .admin import ContextQuery, Csrf, PAGE_SIZE, Page, SearchForm, SearchQuery, administrator, clean_student_search, student_match
+from .admin import ContextQuery, Csrf, PAGE_SIZE, Page, SearchForm, SearchQuery, administrator, clean_student_search, optional_context_id, student_match
 from .bulk import consume_deletion, deletion_preview
 from .file_archives import submission_bytes, submission_zip
 from .grade_routes import get_grade
@@ -63,14 +62,6 @@ FRAGMENT_PAGE_LINES = 60
 FRAGMENT_CONTEXT = 3
 ReportOrigin = Annotated[Literal["informes", "archivos"], Query()]
 
-
-
-def optional_context_id(value: str) -> int | None:
-    if not value:
-        return None
-    if not re.fullmatch(r"[0-9]+", value) or not 0 < int(value) < 2**63:
-        raise HTTPException(400, "Identificador de filtro inválido.")
-    return int(value)
 
 
 def filter_choices(conn, activity_id: str, language_id: str) -> dict:
@@ -265,7 +256,11 @@ def export_selected_reports(
     language_id: Annotated[str, Form(max_length=19)] = "", alerts_only: Annotated[bool, Form()] = False,
     q: SearchForm = "",
 ):
-    chosen = sorted(set(selection)) if selection and not all_results else None
+    if not selection and not all_results:
+        with request.app.state.pool.connection() as conn:
+            administrator(conn, request, csrf)
+        raise HTTPException(400, "Selecciona al menos una entrega.")
+    chosen = sorted(set(selection)) if not all_results else None
     return report_download(request, activity_id, language_id, alerts_only, clean_student_search(q), chosen, csrf)
 
 
