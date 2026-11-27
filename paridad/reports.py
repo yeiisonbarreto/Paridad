@@ -272,7 +272,7 @@ def send_review_notices(
     with request.app.state.pool.connection() as conn:
         user = administrator(conn, request, csrf)
         if not notices_enabled():
-            raise HTTPException(409, "Configura SMTP y el remitente para enviar avisos.")
+            raise HTTPException(409, "Configura el correo saliente y el remitente para enviar avisos.")
         activity, language = optional_context_id(activity_id), optional_context_id(language_id)
         ids = None if all_results else sorted(set(selection))
         rows = conn.execute(

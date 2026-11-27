@@ -1,4 +1,4 @@
-"""Queue academic review notices and deliver them through the configured SMTP relay."""
+"""Queue academic review notices and deliver them through the selected transport."""
 
 import logging
 import os
@@ -13,8 +13,27 @@ LOGGER = logging.getLogger("paridad.notices")
 NOTICE_LOGO = BASE_DIR / "static" / "paridad-logo.png"
 
 
-def notices_enabled():
-    return bool(smtp_configured() and os.getenv("PARIDAD_NOTICE_FROM", "").strip())
+def direct_notice_delivery() -> bool:
+    return os.getenv("PARIDAD_NOTICE_DELIVERY") == "direct"
+
+
+def notice_sender() -> str:
+    sender = normalized_email(os.getenv("PARIDAD_NOTICE_FROM", ""))
+    if direct_notice_delivery():
+        domain = os.getenv("PARIDAD_MAIL_DOMAIN", "").strip().lower()
+        if sender.rsplit("@", 1)[1] != domain:
+            raise ValueError("El remitente de avisos debe pertenecer al dominio de correo saliente.")
+    return sender
+
+
+def notices_enabled() -> bool:
+    if not direct_notice_delivery() and not smtp_configured():
+        return False
+    try:
+        notice_sender()
+    except ValueError:
+        return False
+    return True
 
 
 def enqueue_automatic(conn) -> None:
@@ -62,7 +81,7 @@ def enqueue_manual(conn, student_ids):
 
 def notice_message(job):
     message = EmailMessage()
-    sender = normalized_email(os.environ["PARIDAD_NOTICE_FROM"])
+    sender = notice_sender()
     message["From"] = f"Paridad <{sender}>"
     domain = sender.rsplit("@", 1)[1]
     message["To"] = job["email"]
@@ -122,7 +141,7 @@ def send_next(conn):
         conn.execute("UPDATE review_notices SET status = 'skipped' WHERE id = %s", (job["id"],))
         return True
     try:
-        send_email(notice_message(job))
+        send_email(notice_message(job), direct=direct_notice_delivery())
     except (OSError, ValueError) as exc:
         attempts = job["attempts"] + 1
         LOGGER.warning("Aviso SMTP id=%s intento=%s clase=%s", job["id"], attempts, type(exc).__name__)

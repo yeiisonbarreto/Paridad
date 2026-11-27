@@ -26,7 +26,7 @@
     </form>
     <button type="submit" form="report-selection" formaction="/admin/reports/exportar" class="button">Descargar Excel</button>
   </div>
-  {% if not mail_ready %}<p class="field-help">Configura SMTP y el remitente para enviar avisos.</p>{% endif %}
+  {% if not mail_ready %}<p class="field-help">Configura el correo saliente y el remitente para enviar avisos.</p>{% endif %}
   {% endif %}
   {{ submission_table(submissions, user, mail_ready, selection_form='report-selection') }}
 </section>

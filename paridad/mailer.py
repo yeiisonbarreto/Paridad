@@ -1,4 +1,4 @@
-"""Shared SMTP transport. Credentials are supplied by the deployment."""
+"""SMTP submission through a relay or through Paridad’s private mail service."""
 
 import os
 import smtplib
@@ -10,7 +10,13 @@ def smtp_configured() -> bool:
     return bool(os.getenv("PARIDAD_SMTP_HOST", "").strip())
 
 
-def send_email(message: EmailMessage) -> None:
+def send_email(message: EmailMessage, *, direct: bool = False) -> None:
+    if direct:
+        # Only the worker and the MTA share this Docker network.
+        with smtplib.SMTP("mail-out", 587, timeout=8) as smtp:
+            smtp.send_message(message)
+        return
+
     host = os.environ["PARIDAD_SMTP_HOST"].strip()
     port = int(os.getenv("PARIDAD_SMTP_PORT", "587") or "587")
     username = os.getenv("PARIDAD_SMTP_USERNAME", "")

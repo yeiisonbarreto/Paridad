@@ -24,6 +24,37 @@ El perfil TLS publica HTTPS. Coordina la emisión y renovación de certificados 
 
 ## Avisos de revisión e invitaciones por correo
 
+### Envío directo desde el servidor de Paridad
+
+El archivo `compose.correo.yml` agrega Postfix para los avisos manuales y automáticos. El trabajador de Paridad entrega cada aviso a Postfix por una red privada de Docker. Postfix firma con DKIM, consulta los registros MX de cada destinatario y entrega el mensaje por SMTP con STARTTLS. La cola y las claves se guardan en volúmenes de Docker. El servicio carece de un puerto publicado y de buzones. Para este modo se prescinde de las credenciales de un proveedor SMTP.
+
+En el `.env` del servidor universitario usa un dominio o subdominio que la universidad controle. El remitente y `PARIDAD_MAIL_DOMAIN` deben tener el mismo dominio. Conserva la configuración HTTPS de la instalación.
+
+```dotenv
+PARIDAD_NOTICE_FROM=notificaciones@avisos.tu-universidad.edu
+PARIDAD_MAIL_DOMAIN=avisos.tu-universidad.edu
+PARIDAD_MAIL_HOSTNAME=correo.avisos.tu-universidad.edu
+PUBLIC_URL=https://paridad.tu-universidad.edu
+```
+
+1. Confirma que la IP pública del servidor sea estable y que la red universitaria permita **TCP 25 saliente** hacia los servidores de los destinatarios. Pide al responsable del DNS que publique el registro `A` del nombre de salida y que su registro inverso `PTR` coincida. En el subdominio remitente, publica un registro A que apunte a esa IP, un registro SPF que la autorice y un registro DMARC. Trabaja sobre un subdominio dedicado si el dominio institucional ya tiene un servicio de correo.
+2. Arranca primero el servicio de correo para generar su clave DKIM y consulta el registro público que imprime en los logs.
+
+   ```sh
+   docker compose --env-file .env -f docker-compose.yml -f compose.tls.yml -f compose.correo.yml up -d mail-out
+   docker compose --env-file .env -f docker-compose.yml -f compose.tls.yml -f compose.correo.yml logs mail-out
+   ```
+
+3. Publica el registro TXT DKIM del selector `paridad` en `paridad._domainkey.<dominio-remitente>`. Tras comprobar el DNS, arranca todos los servicios.
+
+   ```sh
+   docker compose --env-file .env -f docker-compose.yml -f compose.tls.yml -f compose.correo.yml up -d --build --wait
+   ```
+
+Al aceptar un aviso, Postfix lo coloca en su cola. Puedes verificar el resultado final de entrega en los logs de `mail-out`. Conserva los volúmenes `mail_queue` y `mail_dkim`. Si la subred privada `172.30.62.0/28` está ocupada, ajusta `PARIDAD_MAIL_SUBNET` a un rango privado libre.
+
+### Envío mediante un relay SMTP
+
 Configura un servidor SMTP con STARTTLS accesible desde la aplicación y el trabajador. Usa direcciones institucionales que el servidor autorice como remitentes. Configura una URL HTTPS pública para que el aviso incluya el enlace a las entregas del estudiante. Para servidores con autenticación, establece el usuario y la contraseña en el `.env` de la instalación.
 
 ```dotenv
@@ -35,7 +66,7 @@ PARIDAD_SMTP_USERNAME=
 PARIDAD_SMTP_PASSWORD=
 ```
 
-Recrea los servicios después de guardar el archivo. `PARIDAD_NOTICE_FROM` activa los avisos de revisión junto con `PARIDAD_SMTP_HOST`. El trabajador envía un correo a la dirección registrada en la cuenta cuando una entrega supera el umbral de similitud o de indicio de IA sin declarar. También revisa los umbrales de entregas ya analizadas, incluidas las anteriores al arranque. Cada tipo de alerta se pone en cola una sola vez por archivo. **Enviar aviso** en Informes permite enviar correos manualmente, uno por destinatario aunque tenga varios archivos seleccionados. El trabajador reintenta errores de SMTP y registra los avisos fallidos.
+Recrea los servicios después de guardar el archivo. `PARIDAD_NOTICE_FROM` activa los avisos de revisión junto con `PARIDAD_SMTP_HOST`. En ambos modos, el trabajador envía un correo a la dirección registrada en la cuenta cuando una entrega supera el umbral de similitud o de indicio de IA sin declarar. También revisa los umbrales de entregas ya analizadas, incluidas las anteriores al arranque. Cada tipo de alerta se pone en cola una sola vez por archivo. **Enviar aviso** en Informes permite enviar correos manualmente, uno por destinatario aunque tenga varios archivos seleccionados. El trabajador reintenta errores de SMTP y registra los avisos fallidos.
 
 Puedes usar una dirección exclusiva de salida como `notificaciones@tu-dominio.edu`. Verifica que el dominio sea tuyo o que tengas permiso para usarlo y autoriza la dirección en el proveedor SMTP. El proveedor se encarga de la entrega y la política de correo entrante. Para excluir respuestas, configura el rechazo de correo entrante para esa dirección. Los avisos llevan un pie que indica que son automáticos, una versión de texto y el logotipo de Paridad incrustado si la imagen está disponible en `static/paridad-logo.png`. Docker puede incorporar el PNG original desde la carpeta del proyecto durante la compilación.
 

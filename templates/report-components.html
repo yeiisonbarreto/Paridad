@@ -40,7 +40,7 @@
     <input type="hidden" name="csrf" value="{{ user.csrf }}">
     <input type="hidden" name="selection" value="{{ item.id }}">
     <input type="hidden" name="destination" value="submissions">
-    <button type="submit" class="file-action-button"{% if not mail_ready %} disabled title="Configura SMTP y el remitente para enviar avisos"{% endif %}>Enviar aviso</button>
+    <button type="submit" class="file-action-button"{% if not mail_ready %} disabled title="Configura el correo saliente y el remitente para enviar avisos"{% endif %}>Enviar aviso</button>
   </form>
 </div>
 </details>

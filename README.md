@@ -61,7 +61,7 @@ Cada estudiante puede tener hasta tres archivos en total. El administrador puede
 
 El estudiante consulta el desglose desde su historial y puede solicitar una aclaración por archivo. En **Aclaraciones**, en el menú superior, el administrador puede responder, resolver o rechazar la solicitud y ajustar la nota. El Excel distingue la nota automática, la docente y la final.
 
-En **Informes → Entregas** puedes seleccionar archivos y pulsar **Enviar aviso** para enviar un correo por estudiante. En **Archivos**, el menú **Acciones** permite enviar un aviso individual. Para enviar avisos manuales y automáticos, configura SMTP y `PARIDAD_NOTICE_FROM` en la instalación. [Configuración de correo](docs/despliegue-moodle.md#avisos-de-revisión-e-invitaciones-por-correo)
+En **Informes → Entregas** puedes seleccionar archivos y pulsar **Enviar aviso** para enviar un correo por estudiante. En **Archivos**, el menú **Acciones** permite enviar un aviso individual. Para enviar avisos manuales y automáticos, configura `PARIDAD_NOTICE_FROM` y usa el servicio de salida de Paridad o un relay SMTP. [Configuración de correo](docs/despliegue-moodle.md#avisos-de-revisión-e-invitaciones-por-correo)
 
 ## Estructura
 

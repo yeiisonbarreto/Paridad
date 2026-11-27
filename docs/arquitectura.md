@@ -21,7 +21,7 @@ flowchart LR
     D -->|"Consulta con rol ADMIN"| A["Informe docente · pares, fragmentos y señales de IA"]
     D -->|"Supera el umbral"| O["PostgreSQL · cola de avisos"]
     A -->|"Envío manual"| O
-    O --> SMTP["Trabajador · SMTP con STARTTLS"]
+    O --> SMTP["Correo saliente · Postfix propio o relay SMTP"]
     S -->|"Una solicitud por entrega"| R["Aclaración y respuesta docente"]
     A --> R
 ```
