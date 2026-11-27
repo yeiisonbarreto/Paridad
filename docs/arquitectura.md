@@ -55,7 +55,7 @@ erDiagram
 | `languages` | Código, nombre, perfil, extensiones y opciones JSONB | Código único |
 | `activities` | Código, título, apertura y umbrales opcionales | Código único |
 | `activity_languages` | Actividad y lenguaje habilitado | PK compuesta, índice inverso por lenguaje |
-| `submissions` | UUID, estudiante, ámbito, nombre, fuente, crédito, estado, intentos, versión, tokens, mapa de líneas, indicio IA y máxima similitud | FK al ámbito; idempotencia por estudiante; índices para historial, cola y entregas completadas |
+| `submissions` | UUID, estudiante, ámbito, nombre, fuente, bytes originales si están disponibles, crédito, estado, intentos, versión, tokens, mapa de líneas, indicio IA y máxima similitud | FK al ámbito; idempotencia por estudiante; índices para historial, cola y entregas completadas |
 | `similarity_pairs` | Ámbito, dos UUID, sus propietarios, resultado, métricas y fragmentos JSONB | PK de UUID ordenados, propietarios distintos, dos FK compuestas al mismo ámbito, índice de informe y extremo derecho |
 | `schema_migrations` | Nombre del SQL aplicado y fecha | PK por nombre de migración |
 
@@ -107,13 +107,16 @@ El total se multiplica por el mínimo entre 1, `tokens / 100` y `líneas de cód
 | `/student/submissions` | POST | Estudiante. Propietario obtenido de la sesión, combinación habilitada, idempotencia y límite de tasa. |
 | `/api/student/submissions` | GET | Estudiante. Proyección tipada de su propio historial, sin registros de pares, identidades de terceros ni fuentes. |
 | `/admin`, `/admin/settings` | GET, POST respectivamente | Administrador. Panel y umbrales globales. |
+| `/admin/perfil` | GET/POST | Administrador. Cambio de usuario y contraseña con confirmación de contraseña actual. |
 | `/admin/accounts`, `/admin/accounts/{id}` | GET/POST, POST respectivamente | Administrador. Alta, actualización, estado, rotación de contraseña y revocación de sesiones de estudiantes. |
 | `/admin/accounts/plantilla`, `/admin/accounts/importar` | GET, POST | Administrador. Plantilla e importación transaccional de Excel con descarga de contraseñas iniciales. |
 | `/admin/accounts/{id}/eliminar`, `/admin/accounts/{id}/invitacion` | GET/POST, POST | Administrador. Confirmación y borrado definitivo, o envío individual de una invitación. |
 | `/invitacion` | GET/POST | Estudiante con token válido. Configuración de contraseña con un enlace de un solo uso. |
 | `/admin/activities`, `/admin/activities/{id}`, `/admin/languages` | GET/POST, POST, POST | Administrador. Actividades, umbrales por actividad y perfiles configurables. |
-| `/admin/reports`, `/admin/reports/{izq}/{der}`, `/admin/submissions/{id}` | GET | Administrador. Comparaciones, fragmentos, fuentes y explicación del indicio. |
+| `/admin/reports`, `/admin/reports/{izq}/{der}` | GET | Administrador. Grupos, comparaciones y fragmentos. |
+| `/admin/submissions`, `/admin/submissions/{id}`, `/admin/submissions/{id}/descargar` | GET | Administrador. Listado de entregas, código, explicación del indicio y descarga. |
+| `/admin/submissions/{id}/eliminar` | GET/POST | Administrador. Confirmación y eliminación de una entrega con recálculo de los resultados afectados. |
 | `/admin/submissions/{id}/retry` | POST | Administrador. Reintento manual tras un fallo de análisis. |
 | `/healthz` | GET | Sonda sin información de usuario. Comprueba acceso a PostgreSQL. |
 
-El profesor que deba consultar informes usa el rol `ADMIN`. El alta de administradores se realiza desde la consola del servidor. La aplicación carece de registro público, autoedición de perfil y autorrestablecimiento de contraseñas. Las vistas y respuestas de estudiante se generan a partir de una lista explícita de campos filtrada por `student_id` de la sesión.
+El profesor que deba consultar informes usa el rol `ADMIN`. El alta de administradores se realiza desde la consola del servidor. La cuenta de administrador puede actualizar sus propias credenciales. Los estudiantes establecen su contraseña a través de una invitación válida o reciben las credenciales de un administrador. Las vistas y respuestas de estudiante se generan a partir de una lista explícita de campos filtrada por `student_id` de la sesión.

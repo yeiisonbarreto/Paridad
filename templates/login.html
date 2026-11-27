@@ -1,24 +1,15 @@
 {% extends "base.html" %}
-{% from "macros.html" import school_logo %}
-{% block title %}Iniciar sesión · Paridad{% endblock %}
+{% block title %}Inicio de sesión · Paridad{% endblock %}
 {% block body_class %}login-page{% endblock %}
-{% block footer %}{% endblock %}
 {% block content %}
-<div class="login-layout">
-  <div class="login-intro">
-    {{ school_logo('login-logo') }}
-    <p class="login-intro-title">Entrega y revisión<br>de código</p>
-  </div>
-  <section class="login-form" aria-labelledby="login-heading">
-    <h1 id="login-heading">Iniciar sesión</h1>
-    <p class="muted">Usa la cuenta asignada por la universidad.</p>
-    {% if error %}<p class="callout alert" role="alert">{{ error }}</p>{% endif %}
-    <form action="/login" method="post" class="stack">
-      <input type="hidden" name="csrf" value="{{ csrf }}">
-      <label>Usuario<input name="username" autocomplete="username" maxlength="64" required></label>
-      <label>Contraseña<input type="password" name="password" autocomplete="current-password" maxlength="128" required></label>
-      <button type="submit" class="button">Ingresar</button>
-    </form>
-  </section>
-</div>
+<section class="card login-form" aria-labelledby="login-heading">
+  <h1 id="login-heading">Inicio de sesión</h1>
+  {% if error %}<p class="callout alert" role="alert">{{ error }}</p>{% endif %}
+  <form action="/login" method="post" class="stack">
+    <input type="hidden" name="csrf" value="{{ csrf }}">
+    <label>Usuario<input name="username" autocomplete="username" maxlength="64" required></label>
+    <label>Contraseña<input type="password" name="password" autocomplete="current-password" maxlength="128" required></label>
+    <button type="submit" class="button">Ingresar</button>
+  </form>
+</section>
 {% endblock %}

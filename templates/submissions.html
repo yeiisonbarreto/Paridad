@@ -1,0 +1,12 @@
+{% extends "base.html" %}
+{% from "macros.html" import pagination %}
+{% from "report-components.html" import results_filters, submission_table %}
+{% block title %}Archivos · Paridad{% endblock %}
+{% block content %}
+<div class="page-heading"><h1>Archivos subidos</h1></div>
+{{ results_filters('/admin/submissions', labs, languages, selected_activity, selected_language) }}
+<section class="card section-gap" aria-label="Archivos subidos">
+  {{ submission_table(submissions) }}
+  {{ pagination('/admin/submissions', page, has_next, ('&activity_id=' ~ selected_activity if selected_activity else '') ~ ('&language_id=' ~ selected_language if selected_language else '')) }}
+</section>
+{% endblock %}

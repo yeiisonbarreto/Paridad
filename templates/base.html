@@ -14,13 +14,17 @@
   <a class="skip-link" href="#main">Saltar al contenido</a>
   <header class="site-header">
     <div class="shell header-row">
-      <a class="brand" href="/"><span class="brand-mark" aria-hidden="true">P</span>Paridad</a>
+      <a class="brand" href="/">
+        {% if paridad_logo_available %}<img class="paridad-logo" src="/static/paridad-logo.png" alt="Paridad">
+        {% else %}Paridad{% endif %}
+      </a>
       {% if user and user.role == 'ADMIN' %}
       {% set current = "Panel" %}
       {% if request.url.path.startswith('/admin/accounts') %}{% set current = "Cuentas" %}
       {% elif request.url.path.startswith('/admin/activities') %}{% set current = "Actividades" %}
-      {% elif request.url.path.startswith('/admin/reports') or request.url.path.startswith('/admin/submissions') %}
+      {% elif request.url.path.startswith('/admin/reports') %}
         {% set current = "Informes" %}
+      {% elif request.url.path.startswith('/admin/submissions') %}{% set current = "Archivos" %}
       {% endif %}
       <nav class="section-nav" aria-label="Administración">
         <details class="dropdown" name="header-menu" data-dropdown>
@@ -29,7 +33,7 @@
             <span>{{ current }}</span>
           </summary>
           <ul class="menu-panel">
-            {% for url, label in [('/admin', 'Panel'), ('/admin/accounts', 'Cuentas'), ('/admin/activities', 'Actividades'), ('/admin/reports', 'Informes')] %}
+            {% for url, label in [('/admin', 'Panel'), ('/admin/accounts', 'Cuentas'), ('/admin/activities', 'Actividades'), ('/admin/reports', 'Informes'), ('/admin/submissions', 'Archivos')] %}
             <li><a href="{{ url }}" {% if current == label %}aria-current="page"{% endif %}>{{ label }}</a></li>
             {% endfor %}
           </ul>
@@ -47,6 +51,7 @@
             <span>{{ user.display_name }}</span>
             {% if user.username %}<span class="table-detail">{{ user.username }}</span>{% endif %}
           </div>
+          {% if user.role == 'ADMIN' %}<a href="/admin/perfil">Mi cuenta</a>{% endif %}
           <form action="/logout" method="post">
             <input type="hidden" name="csrf" value="{{ user.csrf }}">
             <button class="menu-action" type="submit">Cerrar sesión</button>

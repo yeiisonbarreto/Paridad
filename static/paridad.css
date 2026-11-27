@@ -71,17 +71,7 @@ img { display: block; max-inline-size: 100%; height: auto; }
   font-size: 1.2rem;
   font-weight: 600;
 }
-.brand-mark {
-  display: grid;
-  place-items: center;
-  width: 2rem;
-  height: 2rem;
-  border-radius: 0.55rem;
-  background: var(--brand);
-  color: white;
-  font-size: 1.05rem;
-  font-weight: 500;
-}
+.paridad-logo { width: 9rem; max-height: 2.65rem; object-fit: contain; }
 .section-nav { margin-inline-start: 0.2rem; }
 .dropdown { position: relative; }
 .account-menu { margin-inline-start: auto; min-width: 0; }
@@ -136,35 +126,12 @@ img { display: block; max-inline-size: 100%; height: auto; }
 .footer-logo { width: 9.25rem; margin-inline-start: -0.9rem; }
 
 .login-page .content { display: grid; align-content: center; }
-.login-layout {
-  display: grid;
-  grid-template-columns: minmax(0, 1fr) minmax(0, 0.93fr);
-  width: min(100%, 59rem);
-  margin: clamp(0.5rem, 4vh, 2rem) auto;
-  overflow: hidden;
-  border: 1px solid var(--line);
-  border-radius: 1.25rem;
-  background: var(--paper);
-  box-shadow: 0 14px 48px rgb(45 30 20 / 0.06);
+.login-form {
+  width: min(100%, 27rem);
+  margin-inline: auto;
+  padding: clamp(1.4rem, 5vw, 2.4rem);
 }
-.login-intro {
-  display: grid;
-  align-content: center;
-  justify-items: start;
-  padding: clamp(1.5rem, 4vw, 3.5rem);
-  border-inline-end: 1px solid var(--line);
-  background: #f7f1ec;
-}
-.login-logo { width: min(100%, 24rem); margin-inline: auto; mix-blend-mode: multiply; }
-.login-intro-title {
-  margin: clamp(0.7rem, 4vw, 2rem) 0 0;
-  padding-block-start: 1.1rem;
-  border-top: 1px solid #ded0c3;
-  font-size: clamp(1.25rem, 3vw, 2.1rem);
-  line-height: 1.16;
-  letter-spacing: -0.035em;
-}
-.login-form { align-self: center; padding: clamp(1.5rem, 5vw, 3.75rem); }
+.login-form h1 { font-size: clamp(1.6rem, 4vw, 2rem); }
 .login-form form { margin-top: 1.65rem; }
 .login-form .button { width: 100%; margin-top: 0.35rem; }
 
@@ -270,6 +237,8 @@ legend { padding-inline: 0.3rem; font-size: 0.91rem; font-weight: 500; }
 .button.danger:hover { background: var(--brand-dark); }
 .button.secondary.danger { background: var(--paper); border-color: #dfb8af; color: var(--alert-text); }
 .button.secondary.danger:hover { background: var(--alert-bg); }
+.file-actions { display: flex; flex-wrap: wrap; gap: 0.35rem 0.85rem; font-size: 0.9rem; }
+.text-danger { color: var(--alert-text); }
 .account-actions { display: flex; flex-wrap: wrap; gap: 0.55rem; align-items: center; margin-block-end: 0.9rem; }
 
 .empty, .callout { padding: 0.8rem 0.95rem; border-radius: 0.5rem; background: var(--panel); color: var(--muted); }
@@ -305,13 +274,10 @@ code { font: 0.85rem/1.55 ui-monospace, "Cascadia Code", monospace; }
   .shell { width: calc(100% - 1.5rem); }
   .header-row { gap: 0.45rem; min-height: 3.8rem; }
   .brand { gap: 0.42rem; font-size: 1.08rem; }
-  .brand-mark { width: 1.75rem; height: 1.75rem; }
+  .paridad-logo { width: 6.75rem; }
   .menu-trigger { gap: 0.38rem; padding-inline: 0.48rem; }
   .menu-symbol, .account-name { display: none; }
-  .login-layout, .grid-two { grid-template-columns: minmax(0, 1fr); }
-  .login-intro { padding: 0.7rem 1rem; border-inline: 0; border-bottom: 1px solid var(--line); }
-  .login-logo { width: min(100%, 16.5rem); }
-  .login-intro-title { display: none; }
+  .grid-two { grid-template-columns: minmax(0, 1fr); }
   .table-wrap table { min-width: 24rem; }
   .history table { min-width: 0; }
   .tag { margin-inline-start: 0; }

@@ -1,0 +1,18 @@
+{% extends "base.html" %}
+{% from "macros.html" import csrf %}
+{% block title %}Mi cuenta · Paridad{% endblock %}
+{% block content %}
+<div class="page-heading"><h1>Mi cuenta</h1></div>
+<section class="card narrow">
+  {% if saved %}<p class="callout" role="status">Credenciales actualizadas.</p>{% endif %}
+  {% if error %}<p class="callout alert" role="alert">{{ error }}</p>{% endif %}
+  <form action="/admin/perfil" method="post" class="stack">
+    {{ csrf(user) }}
+    <label>Usuario<input required name="new_username" value="{{ user.username }}" maxlength="64" autocomplete="username"></label>
+    <label>Contraseña actual<input required type="password" name="current_password" maxlength="128" autocomplete="current-password"></label>
+    <label>Contraseña nueva (opcional)<input type="password" name="new_password" minlength="12" maxlength="128" autocomplete="new-password"></label>
+    <label>Repite la contraseña nueva<input type="password" name="confirmation" minlength="12" maxlength="128" autocomplete="new-password"></label>
+    <button type="submit" class="button">Guardar cambios</button>
+  </form>
+</section>
+{% endblock %}

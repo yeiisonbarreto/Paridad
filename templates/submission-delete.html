@@ -1,0 +1,17 @@
+{% extends "base.html" %}
+{% from "macros.html" import csrf %}
+{% block title %}Eliminar archivo · Paridad{% endblock %}
+{% block content %}
+<section class="card narrow">
+  <h1>Eliminar archivo</h1>
+  <p>{{ submission.filename }} · {{ submission.display_name }} ({{ submission.username }})</p>
+  <p>Se eliminará esta entrega con sus comparaciones y se actualizarán los resultados afectados.</p>
+  <form action="/admin/submissions/{{ submission.id }}/eliminar" method="post">
+    {{ csrf(user) }}
+    <div class="account-actions">
+      <button type="submit" class="button danger">Eliminar archivo</button>
+      <a href="/admin/submissions/{{ submission.id }}" class="button secondary">Cancelar</a>
+    </div>
+  </form>
+</section>
+{% endblock %}

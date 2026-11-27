@@ -188,16 +188,21 @@ def main():
         assert [row["filename"] for row in history(second)] == ["compania.c", "otra-actividad.c"]
 
         reports = assert_status(admin.get("/admin/reports", params={"activity_id": activity_id, "language_id": c_id})).text
+        assert "Grupos de similitud" in reports and "3 archivos" in reports
         pair_links = PAIR_LINK.findall(reports)
         assert len(pair_links) == 2 and first_name in reports and second_name in reports
         detail = assert_status(admin.get(pair_links[0])).text
         assert "Fragmentos coincidentes" in detail and "líneas " in detail and "100,00 %" in detail
         assert_status(first.get(pair_links[0]), 403)
-        for link in SUBMISSION_LINK.findall(reports):
+        for link in set(SUBMISSION_LINK.findall(reports)):
             detail = assert_status(admin.get(link)).text
             assert "Comentarios explicativos" in detail and "mailto:" in detail
             assert "<b>marca de formato</b>" not in detail and "&lt;b&gt;marca de formato&lt;/b&gt;" in detail
             assert_status(second.get(link), 403)
+            download = assert_status(admin.get(link + "/descargar"))
+            assert download.content in {STYLE_CODE.encode(), RENAMED_CODE.encode()}
+            assert download.headers["content-disposition"].startswith("attachment;")
+            assert_status(first.get(link + "/descargar"), 403)
         assert_status(admin.get("/admin/reports?activity_id=&language_id="))
 
         concurrent_id = re.search(r'<option value="(\d+)">' + concurrent_lab + " ·", student_response.text)[1]

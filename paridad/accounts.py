@@ -13,6 +13,7 @@ from .config import MAX_FILE_BYTES
 from .invitations import create_invitation, mail_enabled, send_invitation_email
 from .roster import MAX_ROSTER_ROWS, XLSX_MEDIA_TYPE, RosterError, parse_roster, workbook_bytes
 from .security import PASSWORDS, USERNAME, check_rate, normalized_email, normalized_username, token_digest, valid_password
+from .submission_records import delete_submissions
 from .web import redirect, view
 
 router = APIRouter(prefix="/admin/accounts")
@@ -222,25 +223,9 @@ def delete_account(
                ORDER BY al.activity_id, al.language_id FOR NO KEY UPDATE OF al""",
             (student_id,),
         ).fetchall()
-        pairs = conn.execute(
-            """DELETE FROM similarity_pairs
-               WHERE left_id IN (SELECT id FROM submissions WHERE student_id = %s)
-                  OR right_id IN (SELECT id FROM submissions WHERE student_id = %s)
-               RETURNING left_id, left_student_id, right_id""",
-            (student_id, student_id),
+        submissions = conn.execute(
+            "SELECT id FROM submissions WHERE student_id = %s", (student_id,),
         ).fetchall()
-        impacted = list({
-            pair["right_id"] if pair["left_student_id"] == student_id else pair["left_id"]
-            for pair in pairs
-        })
-        conn.execute("DELETE FROM submissions WHERE student_id = %s", (student_id,))
-        if impacted:
-            conn.execute(
-                """UPDATE submissions s SET max_similarity_bp = COALESCE(
-                        (SELECT max(p.score_bp) FROM similarity_pairs p
-                         WHERE p.left_id = s.id OR p.right_id = s.id), 0)
-                   WHERE s.id = ANY(%s)""",
-                (impacted,),
-            )
+        delete_submissions(conn, [submission["id"] for submission in submissions])
         conn.execute("DELETE FROM users WHERE id = %s AND role = 'STUDENT'", (student_id,))
     return redirect("/admin/accounts")

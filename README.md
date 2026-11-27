@@ -45,6 +45,14 @@ Tras importar, guarda `paridad-credenciales.xlsx`. Contiene el ID que se usa par
 
 Para que un estudiante elija su propia contraseña, configura el envío SMTP descrito en [Despliegue y Moodle](docs/despliegue-moodle.md) y pulsa **Enviar invitación por correo** desde su cuenta. El estudiante recibe un enlace de un solo uso, válido durante 24 horas. Puede abrirlo y elegir su contraseña. Volver a enviar la invitación reemplaza el enlace anterior.
 
+## Cuenta y entregas del administrador
+
+Desde el menú de la cuenta, abre **Mi cuenta**. Para cambiar el usuario o la contraseña, confirma tu contraseña actual. Paridad cierra las otras sesiones de esa cuenta y renueva la sesión actual.
+
+En **Archivos** e **Informes**, usa **Ver**, **Descargar** o **Eliminar** para cada entrega. Eliminar quita solo la entrega seleccionada y sus comparaciones. El historial de los estudiantes afectados se recalcula. Paridad guarda los bytes originales de las nuevas entregas. Las entregas anteriores a esta actualización se descargan como texto UTF-8 a partir del código almacenado.
+
+En **Informes**, los grupos reúnen archivos de la misma actividad y lenguaje conectados por coincidencias que superan el umbral. Los grupos más similares aparecen primero. Abre **Comparaciones individuales** para ver los fragmentos de cada par.
+
 ## Estructura
 
 ```text

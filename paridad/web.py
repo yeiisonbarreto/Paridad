@@ -21,6 +21,7 @@ def date_label(value: datetime) -> str:
 
 templates = Jinja2Templates(directory=BASE_DIR / "templates")
 templates.env.filters.update(percent=percent, date_label=date_label)
+templates.env.globals["paridad_logo_available"] = (BASE_DIR / "static" / "paridad-logo.png").is_file()
 
 
 def view(request: Request, template: str, *, status: int = 200, **context):

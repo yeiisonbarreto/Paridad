@@ -89,7 +89,7 @@ def own_api(request: Request, page: Annotated[int, Query(ge=1, le=10000)] = 1) -
     return results
 
 
-def read_text_file(file: UploadFile, extensions: list[str]) -> tuple[str, str]:
+def read_text_file(file: UploadFile, extensions: list[str]) -> tuple[str, str, bytes]:
     filename = file.filename or ""
     if not FILENAME.fullmatch(filename) or PurePosixPath(filename).suffix.lower() not in extensions:
         raise HTTPException(400, "El nombre o la extensión del archivo no está permitido.")
@@ -104,7 +104,7 @@ def read_text_file(file: UploadFile, extensions: list[str]) -> tuple[str, str]:
         char not in "\n\t" and unicodedata.category(char) in {"Cc", "Cf", "Cs"} for char in source
     ):
         raise HTTPException(400, "El archivo está vacío o contiene caracteres de control.")
-    return filename, source
+    return filename, source, data
 
 
 @router.post("/student/submissions")
@@ -149,7 +149,7 @@ def submit(
         ).fetchone()
         if not scope:
             raise HTTPException(400, "El lenguaje seleccionado no está habilitado para la actividad.")
-        filename, source = read_text_file(file, scope["extensions"])
+        filename, source, source_bytes = read_text_file(file, scope["extensions"])
         try:
             tokenize(source, scope["profile"], scope["options"])
         except ValueError as exc:
@@ -161,8 +161,8 @@ def submit(
         if count >= MAX_SCOPE_SUBMISSIONS:
             raise HTTPException(409, "La actividad alcanzó su capacidad para este lenguaje.")
         conn.execute(
-            """INSERT INTO submissions (activity_id, language_id, student_id, request_id, filename, source, ai_credit)
-               VALUES (%s, %s, %s, %s, %s, %s, %s) ON CONFLICT (student_id, request_id) DO NOTHING""",
-            (activity_id, language_id, user_id, request_id, filename, source, ai_credit or None),
+            """INSERT INTO submissions (activity_id, language_id, student_id, request_id, filename, source, source_bytes, ai_credit)
+               VALUES (%s, %s, %s, %s, %s, %s, %s, %s) ON CONFLICT (student_id, request_id) DO NOTHING""",
+            (activity_id, language_id, user_id, request_id, filename, source, source_bytes, ai_credit or None),
         )
     return redirect("/student")
