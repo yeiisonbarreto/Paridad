@@ -1,0 +1,10 @@
+{% extends "base.html" %}
+{% block title %}Avisos · Paridad{% endblock %}
+{% block content %}
+<section class="card narrow">
+  <h1>Avisos</h1>
+  <p role="status">{{ queued }} {{ 'aviso programado' if queued == 1 else 'avisos programados' }} para envío por correo.</p>
+  {% if skipped %}<p>{{ skipped }} {{ 'cuenta omitida' if skipped == 1 else 'cuentas omitidas' }} por falta de correo, inactividad o un aviso reciente.</p>{% endif %}
+  <a class="button secondary" href="{{ destination }}">Volver</a>
+</section>
+{% endblock %}

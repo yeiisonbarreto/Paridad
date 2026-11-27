@@ -19,12 +19,16 @@ flowchart LR
     P --> D["PostgreSQL · resultados actualizados"]
     D -->|"Consulta por propietario"| S["Historial del estudiante"]
     D -->|"Consulta con rol ADMIN"| A["Informe docente · pares, fragmentos y señales de IA"]
-    A --> O["Aviso opcional · borrador en cliente de correo"]
+    D -->|"Supera el umbral"| O["PostgreSQL · cola de avisos"]
+    A -->|"Envío manual"| O
+    O --> SMTP["Trabajador · SMTP con STARTTLS"]
+    S -->|"Una solicitud por entrega"| R["Aclaración y respuesta docente"]
+    A --> R
 ```
 
 ### Recálculo y concurrencia
 
-1. FastAPI guarda el original, el crédito opcional y el estado `pending`. Una clave de idempotencia por estudiante impide que al reenviar el mismo formulario se duplique la entrega.
+1. FastAPI guarda el original, el crédito opcional y el estado `pending`. Una clave de idempotencia por estudiante impide que al reenviar el mismo formulario se duplique la entrega. Un bloqueo de la cuenta serializa el conteo de tres archivos incluso si sube a actividades distintas.
 2. El trabajador reclama una fila de `activity_languages` con `FOR NO KEY UPDATE SKIP LOCKED`. Dos trabajadores pueden procesar ámbitos distintos simultáneamente. Cada ámbito procesa una entrega por transacción, de modo que una segunda entrega ve el resultado ya confirmado de la primera.
 3. La transacción inserta un par ordenado por UUID para cada entrega previa de un **estudiante distinto** en exactamente el mismo ámbito, guarda los fragmentos y actualiza ambos máximos. Si no hay pares, el máximo de una entrega analizada es 0 %. El estado final, los pares y los máximos se confirman juntos.
 4. Si la primera entrega tenía 0 % y la segunda obtiene 95 % en su comparación con ella, ambas muestran un máximo de al menos 95 %. El historial del estudiante consulta los resultados propios al cargar y se actualiza aproximadamente cada 10 segundos mientras la pestaña está visible. El foco dentro del historial pausa el refresco automático.
@@ -43,6 +47,8 @@ erDiagram
     ACTIVITY_LANGUAGES ||--o{ SUBMISSIONS : recibe
     SUBMISSIONS ||--o{ SIMILARITY_PAIRS : izquierda
     SUBMISSIONS ||--o{ SIMILARITY_PAIRS : derecha
+    SUBMISSIONS ||--o| GRADE_CLARIFICATIONS : recibe
+    USERS ||--o{ REVIEW_NOTICES : recibe
 ```
 
 | Tabla | Campos y relaciones | Índices y reglas |
@@ -55,11 +61,13 @@ erDiagram
 | `languages` | Código, nombre, perfil, extensiones y opciones JSONB | Código único |
 | `activities` | Código, título, apertura y umbrales opcionales | Código único |
 | `activity_languages` | Actividad y lenguaje habilitado | PK compuesta, índice inverso por lenguaje |
-| `submissions` | UUID, estudiante, ámbito, nombre, fuente, bytes originales si están disponibles, crédito, estado, intentos, versión, tokens, mapa de líneas, indicio IA y máxima similitud | FK al ámbito; idempotencia por estudiante; índices para historial, cola y entregas completadas |
+| `submissions` | UUID, estudiante, ámbito, nombre, fuente, bytes originales si están disponibles, crédito, estado, intentos, versión, tokens, mapa de líneas, indicio IA, máxima similitud, rúbrica y nota docente | FK al ámbito; idempotencia por estudiante; índices para historial, cola y entregas completadas |
 | `similarity_pairs` | Ámbito, dos UUID, sus propietarios, resultado, métricas y fragmentos JSONB | PK de UUID ordenados, propietarios distintos, dos FK compuestas al mismo ámbito, índice de informe y extremo derecho |
+| `grade_clarifications` | Entrega, nota al solicitar, motivo, comentarios, estado y respuesta | PK por entrega, índice de solicitudes por estado y fecha |
+| `review_notices` | Destinatario, entrega en avisos automáticos, causas, estado e intentos | Cola de pendientes e índice por estudiante |
 | `schema_migrations` | Nombre del SQL aplicado y fecha | PK por nombre de migración |
 
-El código de la actividad distingue los laboratorios y puede incluir curso o grupo. Cada actividad tiene un conjunto de perfiles habilitados. El módulo de administración conserva los vínculos que ya tienen entregas. El SQL ejecutable está en [001_initial.sql](../migrations/001_initial.sql).
+El código de la actividad distingue los laboratorios y puede incluir curso o grupo. Cada actividad tiene un conjunto de perfiles habilitados. El módulo de administración conserva los vínculos que ya tienen entregas. El SQL ejecutable está en [las migraciones](../migrations).
 
 ## Análisis por lenguaje
 
@@ -98,6 +106,10 @@ El límite por defecto es de 250 entregas por combinación actividad/lenguaje. U
 
 El total se multiplica por el mínimo entre 1, `tokens / 100` y `líneas de código / 10`. El informe conserva el valor observado y el aporte de cada señal. El valor porcentual es un **índice heurístico sin calibración probabilística**. La alerta de posible uso sin declarar requiere superar el umbral y carecer de crédito declarado. El estudiante informa la herramienta y el tipo de ayuda en el formulario. Las plantillas, la enseñanza de buenas prácticas y los estilos individuales pueden activar alertas. Las decisiones académicas requieren revisión humana y evidencia adicional.
 
+### Nota y aclaraciones
+
+La nota automática suma hasta 15 puntos de estructura, 10 de prácticas, 10 de comentarios en inglés y 15 de similitud. Estructura incluye consistencia de sangría, longitud de línea y organización léxica. Prácticas incluye nombres, marcas de trabajo pendiente y algunas funciones problemáticas en C. El vocabulario estimado del comentario orienta el criterio de inglés y el administrador puede corregir el resultado. Los puntos de similitud se calculan como el entero más próximo a `15 × (1 − similitud)`. El máximo de similitud puede cambiar cuando se analiza una entrega nueva o se elimina una existente, y PostgreSQL actualiza la nota automática con ese cambio. Una nota docente prevalece sobre el cálculo automático hasta que el administrador restaura la rúbrica.
+
 ## Autorización y endpoints
 
 | Ruta | Método | Acceso |
@@ -105,6 +117,7 @@ El total se multiplica por el mínimo entre 1, `tokens / 100` y `líneas de cód
 | `/login`, `/logout` | GET/POST para entrada, POST para salida | Entrada con cuenta asignada. Los POST verifican origen y CSRF. |
 | `/student` | GET | Estudiante. Actividades abiertas e historial propio. |
 | `/student/submissions` | POST | Estudiante. Propietario obtenido de la sesión, combinación habilitada, idempotencia y límite de tasa. |
+| `/student/submissions/{id}/nota`, `/student/submissions/{id}/aclaracion` | GET, POST | Estudiante. Nota propia y una solicitud por entrega. |
 | `/api/student/submissions` | GET | Estudiante. Proyección tipada de su propio historial, sin registros de pares, identidades de terceros ni fuentes. |
 | `/admin`, `/admin/settings` | GET, POST respectivamente | Administrador. Panel y umbrales globales. |
 | `/admin/perfil` | GET/POST | Administrador. Cambio de usuario y contraseña con confirmación de contraseña actual. |
@@ -114,6 +127,9 @@ El total se multiplica por el mínimo entre 1, `tokens / 100` y `líneas de cód
 | `/invitacion` | GET/POST | Estudiante con token válido. Configuración de contraseña con un enlace de un solo uso. |
 | `/admin/activities`, `/admin/activities/{id}`, `/admin/languages` | GET/POST, POST, POST | Administrador. Actividades, umbrales por actividad y perfiles configurables. |
 | `/admin/reports`, `/admin/reports/{izq}/{der}` | GET | Administrador. Grupos, comparaciones y fragmentos. |
+| `/admin/reports/exportar` | GET | Administrador. Similitudes, indicios y notas en Excel. |
+| `/admin/avisos` | POST | Administrador. Avisos manuales a estudiantes seleccionados. |
+| `/admin/aclaraciones`, `/admin/submissions/{id}/aclaracion`, `/admin/submissions/{id}/nota` | GET, POST, POST | Administrador. Listado, respuesta y ajuste de nota. |
 | `/admin/submissions`, `/admin/submissions/{id}`, `/admin/submissions/{id}/descargar` | GET | Administrador. Listado de entregas, código, explicación del indicio y descarga. |
 | `/admin/submissions/{id}/eliminar` | GET/POST | Administrador. Confirmación y eliminación de una entrega con recálculo de los resultados afectados. |
 | `/admin/submissions/{id}/retry` | POST | Administrador. Reintento manual tras un fallo de análisis. |

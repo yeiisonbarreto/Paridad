@@ -30,15 +30,24 @@
 {% if reports %}</section>{% else %}</details>{% endif %}
 {% endmacro %}
 
-{% macro file_actions(item, include_view=true) %}
+{% macro file_actions(item, user, mail_ready, include_view=true, destination='reports') %}
+<details class="file-menu" data-dropdown>
+  <summary aria-label="Acciones de {{ item.filename }}">Acciones</summary>
 <div class="file-actions">
   {% if include_view %}<a href="/admin/submissions/{{ item.id }}" aria-label="Ver {{ item.filename }}">Ver</a>{% endif %}
   <a href="/admin/submissions/{{ item.id }}/descargar" aria-label="Descargar {{ item.filename }}">Descargar</a>
   <a href="/admin/submissions/{{ item.id }}/eliminar" class="text-danger" aria-label="Eliminar {{ item.filename }}">Eliminar</a>
+  <form action="/admin/avisos" method="post">
+    <input type="hidden" name="csrf" value="{{ user.csrf }}">
+    <input type="hidden" name="selection" value="{{ item.id }}">
+    <input type="hidden" name="destination" value="{{ destination }}">
+    <button type="submit" class="file-action-button"{% if not mail_ready %} disabled title="Configura SMTP y el remitente para enviar avisos"{% endif %}>Enviar aviso</button>
+  </form>
 </div>
+</details>
 {% endmacro %}
 
-{% macro submission_table(submissions, grouped=false, selection_form=none) %}
+{% macro submission_table(submissions, user, mail_ready, grouped=false, selection_form=none, destination='reports') %}
 {% if submissions %}
 <div class="table-wrap" tabindex="0" role="region" aria-label="{{ 'Archivos del grupo' if grouped else 'Archivos' }}">
 <table>
@@ -49,6 +58,7 @@
       <th scope="col">Estudiante</th>
       {% if grouped %}<th scope="col">Similitud máxima</th>{% else %}<th scope="col">Actividad y lenguaje</th>{% endif %}
       <th scope="col">Indicio de IA</th>
+      <th scope="col">Nota</th>
       <th scope="col">Acciones</th>
     </tr>
   </thead>
@@ -70,14 +80,8 @@
         {% elif item.state == 'pending' %}<span class="tag pending">En análisis</span>
         {% else %}<span class="tag alert">Análisis fallido</span>{% endif %}
       </td>
-      <td>
-        {% if selection_form %}
-        <details class="file-menu" data-dropdown>
-          <summary aria-label="Acciones de {{ item.filename }}">Acciones</summary>
-          {{ file_actions(item) }}
-        </details>
-        {% else %}{{ file_actions(item) }}{% endif %}
-      </td>
+      <td class="numeric">{{ (item.grade ~ ' / 50') if item.grade is not none else '—' }}</td>
+      <td>{{ file_actions(item, user, mail_ready, destination=destination) }}</td>
     </tr>
     {% endfor %}
   </tbody>

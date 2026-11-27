@@ -26,6 +26,8 @@ def cells(values):
             yield "<c/>"
         elif isinstance(value, Percentage):
             yield f'<c s="1"><v>{value.basis_points / 10000:.4f}</v></c>'
+        elif isinstance(value, int):
+            yield f"<c><v>{value}</v></c>"
         else:
             text = escape(BAD_XML_CHARACTERS.sub("�", str(value)))
             yield f'<c t="inlineStr"><is><t xml:space="preserve">{text}</t></is></c>'

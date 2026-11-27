@@ -62,5 +62,6 @@ def migrate() -> None:
             conn.execute(
                 """GRANT SELECT, INSERT, UPDATE, DELETE ON
                    users, sessions, rate_limits, settings, languages, activities,
-                   activity_languages, submissions, similarity_pairs, student_invitations, bulk_deletions TO paridad_app"""
+                   activity_languages, submissions, similarity_pairs, student_invitations, bulk_deletions,
+                   grade_clarifications, review_notices TO paridad_app"""
             )

@@ -1,0 +1,33 @@
+{% extends "base.html" %}
+{% from "macros.html" import pagination %}
+{% from "grade-components.html" import clarification_status %}
+{% block title %}Aclaraciones · Paridad{% endblock %}
+{% block content %}
+<div class="page-heading"><a href="/admin/reports">Volver a informes</a><h1>Aclaraciones</h1></div>
+<section class="card">
+  <form method="get" action="/admin/aclaraciones" class="clarification-filters">
+    <label for="clarification-state">Estado</label>
+    <select id="clarification-state" name="state">
+      <option value="pending"{% if filter_state == 'pending' %} selected{% endif %}>Pendientes</option>
+      <option value="all"{% if filter_state == 'all' %} selected{% endif %}>Todas</option>
+    </select>
+    <button type="submit" class="button secondary">Filtrar</button>
+  </form>
+  {% if rows %}
+  <div class="table-wrap" role="region" aria-label="Solicitudes de aclaración" tabindex="0">
+    <table>
+      <thead><tr><th scope="col">Estudiante</th><th scope="col">Entrega</th><th scope="col">Nota</th><th scope="col">Estado</th><th scope="col">Solicitud</th></tr></thead>
+      <tbody>{% for row in rows %}
+      <tr>
+        <td>{{ row.display_name }} <span class="table-detail">{{ row.username }}</span></td>
+        <td>{{ row.filename }} <span class="table-detail">{{ row.activity }}</span></td>
+        <td>{{ row.grade if row.grade is not none else '—' }} / 50</td>
+        <td>{{ clarification_status(row.status) }}</td>
+        <td><a href="/admin/submissions/{{ row.id }}#aclaracion">Abrir</a></td>
+      </tr>{% endfor %}</tbody>
+    </table>
+  </div>
+  {% else %}<p class="empty">Sin solicitudes para este filtro.</p>{% endif %}
+  {{ pagination('/admin/aclaraciones', page, has_next, '&state=' ~ filter_state) }}
+</section>
+{% endblock %}

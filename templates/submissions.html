@@ -14,7 +14,7 @@
     {{ bulk_controls('Todos los archivos del filtro', [('zip', 'Descargar ZIP'), ('delete', 'Eliminar')]) }}
   </form>
   {% endif %}
-  {{ submission_table(submissions, selection_form='file-selection') }}
+  {{ submission_table(submissions, user, mail_ready, selection_form='file-selection', destination='submissions') }}
   {{ pagination('/admin/submissions', page, has_next, ('&activity_id=' ~ selected_activity if selected_activity else '') ~ ('&language_id=' ~ selected_language if selected_language else '')) }}
 </section>
 {% endblock %}

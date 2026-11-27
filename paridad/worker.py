@@ -11,6 +11,8 @@ from psycopg_pool import PoolTimeout
 
 from .analysis import ANALYSIS_VERSION, Prepared, analyze_style, compare, tokenize
 from .db import make_pool
+from .grading import static_rubric
+from .notices import enqueue_automatic, notices_enabled, send_next
 
 LOGGER = logging.getLogger("paridad.worker")
 
@@ -21,12 +23,15 @@ def process_submission(conn, job: dict) -> None:
     normalized = {"tokens": lexed.tokens, "lines": lexed.lines}
     prepared = Prepared.from_analysis(normalized)
     ai_bp, features = analyze_style(lexed)
+    rubric = static_rubric(job["source"], job["profile"], lexed)
+    quality = rubric["structure"] + rubric["practices"] + rubric["english_comments"]
     max_bp = 0
 
     conn.execute(
         """UPDATE submissions SET state = 'completed', analyzed_at = now(), analysis = %s,
-                  ai_bp = %s, ai_features = %s, analysis_version = %s WHERE id = %s""",
-        (Jsonb(normalized), ai_bp, Jsonb(features), ANALYSIS_VERSION, job["id"]),
+                  ai_bp = %s, ai_features = %s, analysis_version = %s, rubric = %s, quality_points = %s
+                  WHERE id = %s""",
+        (Jsonb(normalized), ai_bp, Jsonb(features), ANALYSIS_VERSION, Jsonb(rubric), quality, job["id"]),
     )
     with conn.cursor(name="cohort") as cursor:
         cursor.itersize = 8
@@ -107,12 +112,33 @@ def process_next(conn) -> bool:
     return True
 
 
+def backfill_grade(conn) -> bool:
+    row = conn.execute(
+        """SELECT s.id, s.source, l.profile, l.options FROM submissions s
+           JOIN languages l ON l.id = s.language_id
+           WHERE s.state = 'completed' AND s.rubric IS NULL
+           ORDER BY s.created_at, s.id LIMIT 1 FOR NO KEY UPDATE OF s SKIP LOCKED"""
+    ).fetchone()
+    if not row:
+        return False
+    try:
+        lexed = tokenize(row["source"], row["profile"], row["options"])
+        rubric = static_rubric(row["source"], row["profile"], lexed)
+        quality = rubric["structure"] + rubric["practices"] + rubric["english_comments"]
+    except ValueError:
+        rubric, quality = {"unavailable": True}, None
+    conn.execute("UPDATE submissions SET rubric = %s, quality_points = %s WHERE id = %s",
+                 (Jsonb(rubric), quality, row["id"]))
+    return True
+
+
 def run() -> None:
     logging.basicConfig(level=logging.INFO)
     stop = Event()
     for sig in (signal.SIGTERM, signal.SIGINT):
         signal.signal(sig, lambda *_: stop.set())
     next_cleanup = 0.0
+    next_notice_scan = 0.0
     with make_pool() as pool:
         while not stop.is_set():
             try:
@@ -125,7 +151,17 @@ def run() -> None:
                     next_cleanup = monotonic() + 300
                 with pool.connection() as conn:
                     processed = process_next(conn)
-                if not processed:
+                with pool.connection() as conn:
+                    graded = backfill_grade(conn)
+                sent = False
+                if notices_enabled():
+                    if monotonic() >= next_notice_scan:
+                        with pool.connection() as conn:
+                            enqueue_automatic(conn)
+                        next_notice_scan = monotonic() + 10
+                    with pool.connection() as conn:
+                        sent = send_next(conn)
+                if not processed and not graded and not sent:
                     stop.wait(1)
             except (OperationalError, PoolTimeout) as exc:
                 LOGGER.warning("PostgreSQL no disponible clase=%s", type(exc).__name__)

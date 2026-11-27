@@ -1,9 +1,13 @@
 {% extends "base.html" %}
-{% from "macros.html" import pagination %}
+{% from "macros.html" import bulk_controls, csrf, pagination %}
 {% from "report-components.html" import results_filters, submission_table %}
 {% block title %}Informes · Paridad{% endblock %}
 {% block content %}
-<div class="page-heading"><h1>Informes</h1></div>
+<div class="page-heading grade-heading">
+  <h1>Informes</h1>
+  <div class="filter-actions"><a class="button secondary" href="#entregas">Avisos</a>
+  <a class="button secondary" href="/admin/aclaraciones">Aclaraciones</a></div>
+</div>
 {{ results_filters('/admin/reports', labs, languages, selected_activity, selected_language, alerts_only) }}
 <section class="card section-gap" aria-labelledby="groups-heading">
   <h2 id="groups-heading">Grupos de similitud</h2>
@@ -17,7 +21,7 @@
       <span class="tag alert">{{ group.max_score|percent }}</span>
     </summary>
     <div class="disclosure-content">
-      {{ submission_table(group.files, true) }}
+      {{ submission_table(group.files, user, mail_ready, grouped=true) }}
     </div>
   </details>
   {% else %}<p class="empty">Ningún grupo supera el umbral de similitud.</p>{% endfor %}
@@ -42,9 +46,23 @@
   {% else %}<p class="empty">Sin comparaciones para estos filtros.</p>{% endif %}
   </div>
 </details>
-<details class="card section-gap panel-disclosure" open>
-  <summary>Entregas e indicios de IA</summary>
-  <div class="disclosure-content">{{ submission_table(submissions) }}</div>
+<details class="card section-gap panel-disclosure" id="entregas" open>
+  <summary>Entregas, notas y avisos</summary>
+  <div class="disclosure-content">
+    {% if submissions %}
+    <form action="/admin/avisos" method="post" id="report-selection" class="bulk-toolbar" data-bulk-selection>
+      {{ csrf(user) }}
+      <input type="hidden" name="activity_id" value="{{ selected_activity or '' }}">
+      <input type="hidden" name="language_id" value="{{ selected_language or '' }}">
+      {% if alerts_only %}<input type="hidden" name="alerts_only" value="true">{% endif %}
+      {{ bulk_controls('Todos los archivos del filtro', [('notice', 'Enviar aviso a la selección')], disabled=not mail_ready) }}
+    </form>
+    {% endif %}
+    {% if not mail_ready %}
+    <p class="field-help">Configura SMTP y el remitente para enviar avisos.</p>
+    {% endif %}
+    {{ submission_table(submissions, user, mail_ready, selection_form='report-selection') }}
+  </div>
 </details>
 {{ pagination('/admin/reports', page, has_next, ('&activity_id=' ~ selected_activity if selected_activity else '') ~ ('&language_id=' ~ selected_language if selected_language else '') ~ ('&alerts_only=true' if alerts_only else '')) }}
 {% endblock %}

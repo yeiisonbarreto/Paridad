@@ -17,10 +17,14 @@ from .web import redirect, view
 
 router = APIRouter()
 PAGE_SIZE = 30
+MAX_STUDENT_FILES = 3
 FILENAME = re.compile(r"\w[\w .()+-]{0,119}")
 
 
 class OwnResult(BaseModel):
+    id: UUID
+    grade: int | None
+    clarification_status: str | None
     filename: str
     activity: str
     language: str
@@ -35,17 +39,20 @@ class OwnResult(BaseModel):
 
 def owned_history(conn, student_id: int, page: int):
     rows = conn.execute(
-        """SELECT s.filename, a.code AS activity, l.name AS language, s.created_at,
+        """SELECT s.id, s.filename, a.code AS activity, l.name AS language, s.created_at,
+                  COALESCE(s.grade_override, s.automatic_grade) AS grade, c.status AS clarification_status,
                   s.state, s.max_similarity_bp, s.ai_bp, (s.ai_credit IS NOT NULL) AS ai_declared,
                   COALESCE(a.similarity_threshold, cfg.similarity_threshold) AS similarity_threshold,
                   COALESCE(a.ai_threshold, cfg.ai_threshold) AS ai_threshold
            FROM submissions s JOIN activities a ON a.id = s.activity_id
-           JOIN languages l ON l.id = s.language_id CROSS JOIN settings cfg
+           JOIN languages l ON l.id = s.language_id LEFT JOIN grade_clarifications c ON c.submission_id = s.id
+           CROSS JOIN settings cfg
            WHERE s.student_id = %s ORDER BY s.created_at DESC, s.id DESC LIMIT %s OFFSET %s""",
         (student_id, PAGE_SIZE + 1, (page - 1) * PAGE_SIZE),
     ).fetchall()
     return [
         OwnResult(
+            id=row["id"], grade=row["grade"], clarification_status=row["clarification_status"],
             filename=row["filename"], activity=row["activity"], language=row["language"],
             submitted_at=row["created_at"], state=row["state"],
             similarity_bp=row["max_similarity_bp"] if row["state"] == "completed" else None,
@@ -67,6 +74,9 @@ def dashboard(request: Request, page: Annotated[int, Query(ge=1, le=10000)] = 1)
                JOIN languages l ON l.id = al.language_id WHERE a.is_open ORDER BY a.code, l.name"""
         ).fetchall()
         results, has_next = owned_history(conn, user["id"], page)
+        upload_count = conn.execute(
+            "SELECT count(*) AS total FROM submissions WHERE student_id = %s", (user["id"],),
+        ).fetchone()["total"]
     activities, languages = {}, {}
     for scope in scopes:
         activity_id, language_id = scope["activity_id"], scope["language_id"]
@@ -77,7 +87,7 @@ def dashboard(request: Request, page: Annotated[int, Query(ge=1, le=10000)] = 1)
         entry["activities"].append(str(activity_id))
     return view(
         request, "student.html", user=user, activities=activities, languages=languages,
-        results=results, deterrence=CLIENT_DETERRENCE, page=page, has_next=has_next, request_id=uuid4(),
+        results=results, upload_count=upload_count, upload_limit=MAX_STUDENT_FILES, deterrence=CLIENT_DETERRENCE, page=page, has_next=has_next, request_id=uuid4(),
     )
 
 
@@ -132,6 +142,10 @@ def submit(
         user = auth_user(conn, request, "STUDENT")
         check_csrf(user["csrf"], csrf)
         user_id = user["id"]
+        if not conn.execute(
+            "SELECT id FROM users WHERE id = %s AND active FOR NO KEY UPDATE", (user_id,),
+        ).fetchone():
+            raise HTTPException(403, "La cuenta está inhabilitada.")
         if conn.execute(
             "SELECT 1 FROM submissions WHERE student_id = %s AND request_id = %s", (user_id, request_id)
         ).fetchone():
@@ -154,6 +168,11 @@ def submit(
             tokenize(source, scope["profile"], scope["options"])
         except ValueError as exc:
             raise HTTPException(400, str(exc)) from None
+        own_count = conn.execute(
+            "SELECT count(*) AS total FROM submissions WHERE student_id = %s", (user_id,),
+        ).fetchone()["total"]
+        if own_count >= MAX_STUDENT_FILES:
+            raise HTTPException(409, "Alcanzaste el máximo de tres archivos.")
         count = conn.execute(
             "SELECT count(*) AS total FROM submissions WHERE activity_id = %s AND language_id = %s",
             (activity_id, language_id),

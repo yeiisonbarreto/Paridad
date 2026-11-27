@@ -70,7 +70,7 @@ def upload(client, token, activity, language, filename, content, *, request_id=N
 def history(client):
     rows = assert_status(client.get("/api/student/submissions")).json()
     keys = {"filename", "activity", "language", "submitted_at", "state", "similarity_bp",
-            "similarity_alert", "ai_bp", "ai_alert", "ai_declared"}
+            "similarity_alert", "ai_bp", "ai_alert", "ai_declared", "id", "grade", "clarification_status"}
     assert all(set(row) == keys for row in rows)
     return rows
 
@@ -197,7 +197,7 @@ def main():
         assert_status(first.get(pair_links[0]), 403)
         for link in set(SUBMISSION_LINK.findall(reports)):
             detail = assert_status(admin.get(link)).text
-            assert "Comentarios explicativos" in detail and "mailto:" in detail
+            assert "Comentarios explicativos" in detail and "Ajustar nota" in detail and "Enviar aviso" in detail
             assert "<b>marca de formato</b>" not in detail and "&lt;b&gt;marca de formato&lt;/b&gt;" in detail
             assert_status(second.get(link), 403)
             download = assert_status(admin.get(link + "/descargar"))
@@ -218,12 +218,33 @@ def main():
             assert pairs_sheet["J2"].value == 0.4 and pairs_sheet.max_row == 3
             assert all(row[0] == lab and row[1] == "C" for row in submissions_sheet.iter_rows(min_row=2, values_only=True))
             assert {row[4] for row in submissions_sheet.iter_rows(min_row=2, values_only=True)} == {
-                "primero.c", "mismo-estudiante.c",
+                "primero.c", "mismo-estudiante.c", "compania.c",
             }
             assert submissions_sheet["I2"].number_format == "0.00%"
         finally:
             workbook.close()
 
+        graded = wait_result(first, "primero.c", 10000)
+        assert 0 <= graded["grade"] <= 50
+        grade_url = f"/student/submissions/{graded['id']}/nota"
+        assert "Comentarios en inglés" in assert_status(first.get(grade_url)).text
+        assert_status(second.get(grade_url), 404)
+        clarification = f"/student/submissions/{graded['id']}/aclaracion"
+        post(first, clarification, first_csrf, reason="Verificar los comentarios", comments="Revisar este archivo.")
+        post(first, clarification, first_csrf, 409, reason="Duplicada")
+        assert "primero.c" in assert_status(admin.get("/admin/aclaraciones")).text
+        decision = f"/admin/submissions/{graded['id']}/aclaracion"
+        post(first, decision, first_csrf, 403, decision="resolved", response="Sin acceso")
+        post(admin, decision, admin_csrf, decision="resolved", response="Comentario del docente", grade=42)
+        assert wait_result(first, "primero.c")["grade"] == 42
+        assert "Comentario del docente" in assert_status(first.get(grade_url)).text
+        assert "primero.c" not in assert_status(admin.get("/admin/aclaraciones")).text
+
+        # Free two slots after the tests above, so the same student can test another activity.
+        existing = {row["filename"]: row["id"] for row in history(first)}
+        upload(first, first_csrf, separate_id, c_id, "cuarto.c", STYLE_CODE, status=409)
+        for filename in ("otro-lenguaje.txt", "mismo-estudiante.c"):
+            post(admin, f"/admin/submissions/{existing[filename]}/eliminar", admin_csrf)
         concurrent_id = re.search(r'<option value="(\d+)">' + concurrent_lab + " ·", student_response.text)[1]
         with ThreadPoolExecutor(max_workers=2) as executor:
             tasks = [
@@ -312,7 +333,7 @@ def main():
         for student_id in ids:
             assert_status(admin.get(f"/admin/accounts/{student_id}/eliminar"), 404)
 
-    print("Flujo HTTP verificado: autorización, recálculo, ámbitos, fragmentos, crédito, límites, sesiones, manejo de cuentas, exportación y operaciones en lote.")
+    print("Flujo HTTP verificado: autorización, recálculo, ámbitos, fragmentos, crédito, límites, sesiones, manejo de cuentas, exportación, operaciones en lote, notas y aclaraciones.")
 
 
 if __name__ == "__main__":

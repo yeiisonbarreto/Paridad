@@ -22,7 +22,7 @@
       {% set current = "Panel" %}
       {% if request.url.path.startswith('/admin/accounts') %}{% set current = "Cuentas" %}
       {% elif request.url.path.startswith('/admin/activities') %}{% set current = "Actividades" %}
-      {% elif request.url.path.startswith('/admin/reports') %}
+      {% elif request.url.path.startswith('/admin/reports') or request.url.path.startswith('/admin/aclaraciones') %}
         {% set current = "Informes" %}
       {% elif request.url.path.startswith('/admin/submissions') %}{% set current = "Archivos" %}
       {% endif %}

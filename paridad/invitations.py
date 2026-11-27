@@ -3,14 +3,13 @@
 import os
 import re
 import secrets
-import smtplib
-import ssl
 from email.message import EmailMessage
 from typing import Annotated
 
 from fastapi import APIRouter, Form, HTTPException, Query, Request
 
 from .config import PUBLIC_ORIGIN, SECURE_COOKIES
+from .mailer import send_email, smtp_configured
 from .security import PASSWORDS, check_rate, normalized_email, source_ip, token_digest, valid_password
 from .web import redirect, view
 
@@ -20,7 +19,7 @@ INVALID_INVITATION = "Invitación vencida, revocada o ya utilizada. Solicita otr
 
 
 def mail_enabled() -> bool:
-    return bool(SECURE_COOKIES and os.getenv("PARIDAD_SMTP_HOST", "").strip()
+    return bool(SECURE_COOKIES and smtp_configured()
                 and os.getenv("PARIDAD_SMTP_FROM", "").strip())
 
 
@@ -46,17 +45,7 @@ def send_invitation_email(address: str, username: str, token: str) -> None:
         f"Elige tu contraseña en {PUBLIC_ORIGIN}/invitacion?token={token}\n\n"
         "La invitación dura 24 horas y se puede usar una vez.\n"
     )
-    host = os.environ["PARIDAD_SMTP_HOST"].strip()
-    port = int(os.getenv("PARIDAD_SMTP_PORT", "587") or "587")
-    username_smtp = os.getenv("PARIDAD_SMTP_USERNAME", "")
-    password_smtp = os.getenv("PARIDAD_SMTP_PASSWORD", "")
-    if not 1 <= port <= 65535 or bool(username_smtp) != bool(password_smtp):
-        raise ValueError("Configuración SMTP inválida")
-    with smtplib.SMTP(host, port, timeout=8) as smtp:
-        smtp.starttls(context=ssl.create_default_context())
-        if username_smtp:
-            smtp.login(username_smtp, password_smtp)
-        smtp.send_message(message)
+    send_email(message)
 
 
 def find_invitation(conn, token_hash: bytes):

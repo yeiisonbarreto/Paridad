@@ -22,19 +22,22 @@ curl --fail https://paridad.universidad.edu/healthz
 
 El perfil TLS publica HTTPS. Coordina la emisión y renovación de certificados con el servicio institucional. Tras renovar archivos dentro del directorio montado, recarga Nginx. Conserva `.env` con permisos restrictivos. El servicio de migraciones usa el propietario de PostgreSQL y prepara un rol de operación sin permisos para alterar el esquema ni administrar roles. La aplicación y el trabajador reciben únicamente la credencial del rol de operación.
 
-## Invitaciones por correo
+## Avisos de revisión e invitaciones por correo
 
-Con Paridad en HTTPS, configura un servidor SMTP que admita STARTTLS y al que pueda conectarse el contenedor de la aplicación. Usa la dirección institucional que tu servidor autoriza como remitente. Para servidores con autenticación, establece el usuario y la contraseña en el `.env` de la instalación.
+Configura un servidor SMTP con STARTTLS accesible desde la aplicación y el trabajador. Usa direcciones institucionales que el servidor autorice como remitentes. Configura una URL HTTPS pública para que el aviso incluya el enlace a las entregas del estudiante. Para servidores con autenticación, establece el usuario y la contraseña en el `.env` de la instalación.
 
 ```dotenv
 PARIDAD_SMTP_HOST=smtp.tu-universidad.edu
 PARIDAD_SMTP_PORT=587
+PARIDAD_NOTICE_FROM=docente@tu-universidad.edu
 PARIDAD_SMTP_FROM=notificaciones@tu-universidad.edu
 PARIDAD_SMTP_USERNAME=
 PARIDAD_SMTP_PASSWORD=
 ```
 
-Recrea los servicios después de guardar el archivo. En **Cuentas**, guarda un correo válido para el estudiante y comprueba que su cuenta esté activa. Solo se envía un mensaje cuando el administrador pulsa **Enviar invitación por correo**. Los enlaces usan `PUBLIC_URL`, caducan en 24 horas y se invalidan al usar, reenviar, cambiar el correo, restablecer la contraseña desde administración o inhabilitar la cuenta.
+Recrea los servicios después de guardar el archivo. `PARIDAD_NOTICE_FROM` activa los avisos de revisión junto con `PARIDAD_SMTP_HOST`. El trabajador envía un correo a la dirección registrada en la cuenta cuando una entrega supera el umbral de similitud o de indicio de IA sin declarar. También revisa los umbrales de entregas ya analizadas, incluidas las anteriores al arranque. Cada tipo de alerta se pone en cola una sola vez por archivo. **Informes → Avisos** permite enviar correos manualmente, uno por destinatario aunque tenga varios archivos seleccionados. El trabajador reintenta errores de SMTP y registra los avisos fallidos.
+
+`PARIDAD_SMTP_FROM` se usa para las invitaciones de contraseña. En **Cuentas**, guarda un correo válido para el estudiante y comprueba que su cuenta esté activa. Solo se envía un mensaje cuando el administrador pulsa **Enviar invitación por correo**. Los enlaces usan `PUBLIC_URL`, caducan en 24 horas y se invalidan al usar, reenviar, cambiar el correo, restablecer la contraseña desde administración o inhabilitar la cuenta.
 
 ## Moodle con sesión local
 
@@ -72,7 +75,6 @@ El inicio OIDC debe emitir `state` y `nonce` de un solo uso con vencimiento y de
 - **Archivos, XSS y SQLi.** Nginx y FastAPI limitan el cuerpo a 144 KiB. FastAPI valida el archivo a 128 KiB, extensión por perfil, nombre, texto UTF-8 y límites léxicos. Las fuentes se guardan como texto en PostgreSQL. Jinja escapa datos y código, la CSP limita recursos y las consultas usan parámetros SQL. La interfaz no envía código de terceros, parejas ni identificadores de compañeros a estudiantes.
 - **Límites de tasa.** Nginx aplica un límite general por IP. PostgreSQL mantiene ventanas de 15 minutos para el inicio de sesión (80 por IP, 12 por usuario) y de 10 minutos para las entregas (12 por alumno). Los rechazos usan HTTP 429. Si Nginx queda detrás de otro proxy, configura allí el módulo de IP real con rangos explícitos antes de tomar `$remote_addr` como la IP del cliente. El puerto de FastAPI permanece privado.
 - **Controles en el navegador.** El historial del estudiante inhibe clic derecho, copia y selección en su zona de resultados, y disuade atajos de inspección habituales cuando el navegador permite interceptarlos. La versión de JavaScript servida está minificada. Estas medidas son disuasorias y se pueden desactivar con `CLIENT_DETERRENCE=false`. La protección de datos y permisos reside en el servidor. Una persona puede inspeccionar y guardar los datos que su navegador recibe.
-- **Aviso externo opcional.** El informe individual permite preparar un borrador genérico en el cliente de correo del administrador. El administrador selecciona el destinatario y decide si lo envía. La aplicación carece de credenciales SMTP y automatización de correo.
 - **Respaldo.** Usa `pg_dump` y una política institucional de copias cifradas con acceso restringido. Prueba la restauración en una instancia aislada. Define retención académica para fuentes, métricas, informes y copias. Restringe el acceso al volumen y a las credenciales.
 - **Versionado.** Haz copias antes de actualizar imágenes o migraciones. Un cambio de versión de análisis debe reindexar las entregas históricas del ámbito de manera coordinada. Las métricas históricas de distintas versiones requieren sus propias reglas de comparación.
 

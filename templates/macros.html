@@ -31,14 +31,14 @@
        decoding="async">
 {% endmacro %}
 
-{% macro bulk_controls(all_label, actions) %}
+{% macro bulk_controls(all_label, actions, disabled=false) %}
   <div class="bulk-scopes">
     <label class="check" hidden data-page-selection><input type="checkbox" data-bulk-page> Toda esta página</label>
     <label class="check"><input type="checkbox" name="all_results" value="true" data-bulk-all> {{ all_label }}</label>
   </div>
-  <div class="bulk-actions">
+  <fieldset class="bulk-actions"{% if disabled %} disabled{% endif %}>
     {% for value, label in actions %}
     <button type="submit" name="action" value="{{ value }}" class="button secondary{% if value == 'delete' %} danger{% endif %}">{{ label }}</button>
     {% endfor %}
-  </div>
+  </fieldset>
 {% endmacro %}

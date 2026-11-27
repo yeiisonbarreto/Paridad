@@ -11,6 +11,8 @@ from starlette.responses import Response, StreamingResponse
 from .admin import ContextQuery, Csrf, PAGE_SIZE, Page, administrator
 from .bulk import consume_deletion, deletion_preview
 from .file_archives import submission_bytes, submission_zip
+from .grade_routes import get_grade
+from .notices import enqueue_manual, notices_enabled
 from .report_excel import MAX_SHEET_ROWS, XLSX_MEDIA_TYPE, Percentage, report_excel
 from .similarity_groups import similarity_groups
 from .submission_records import delete_submissions, lock_submission_scopes
@@ -21,7 +23,8 @@ router = APIRouter(prefix="/admin")
 SUBMISSION_LIST = """
     SELECT s.id, s.filename, s.state, s.ai_bp, s.ai_credit IS NOT NULL AS declared,
            a.code, l.name AS language, u.display_name, u.username,
-           s.max_similarity_bp, s.ai_credit, COALESCE(a.ai_threshold, cfg.ai_threshold) AS ai_threshold,
+           s.max_similarity_bp, s.ai_credit, s.automatic_grade, s.grade_override,
+           COALESCE(s.grade_override, s.automatic_grade) AS grade, COALESCE(a.ai_threshold, cfg.ai_threshold) AS ai_threshold,
            COALESCE(a.similarity_threshold, cfg.similarity_threshold) AS similarity_threshold,
            s.ai_credit IS NULL AND s.ai_bp > 100 * COALESCE(a.ai_threshold, cfg.ai_threshold) AS alert
     FROM submissions s JOIN activities a ON a.id = s.activity_id JOIN languages l ON l.id = s.language_id
@@ -31,7 +34,8 @@ SUBMISSION_LIST = """
 
 SUBMISSION_FILTER = """
     WHERE (%s::bigint IS NULL OR a.id = %s) AND (%s::bigint IS NULL OR l.id = %s)
-      AND (NOT %s OR (s.ai_credit IS NULL AND s.ai_bp > 100 * COALESCE(a.ai_threshold, cfg.ai_threshold)))
+      AND (NOT %s OR s.max_similarity_bp > 100 * COALESCE(a.similarity_threshold, cfg.similarity_threshold)
+          OR (s.ai_credit IS NULL AND s.ai_bp > 100 * COALESCE(a.ai_threshold, cfg.ai_threshold)))
 """
 
 PAIR_LIST = """
@@ -138,6 +142,7 @@ def reports(
         request, "reports.html", user=user, **filters, alerts_only=alerts_only, groups=groups,
         pairs=pairs[:PAGE_SIZE], submissions=submissions[:PAGE_SIZE], page=page,
         has_next=groups_next or len(pairs) > PAGE_SIZE or len(submissions) > PAGE_SIZE,
+        mail_ready=notices_enabled(),
     )
 
 
@@ -169,7 +174,7 @@ def submission_export_rows(conn, parameters):
                 Percentage(item["similarity_threshold"] * 100),
                 Percentage(item["ai_bp"]) if completed else None, Percentage(item["ai_threshold"] * 100),
                 "Sí" if item["declared"] else "No", item["ai_credit"],
-                "Revisión" if item["alert"] else None,
+                "Revisión" if item["alert"] else None, item["automatic_grade"], item["grade_override"], item["grade"],
             )
 
 
@@ -187,7 +192,7 @@ def export_workbook(pool, parameters):
                 "Entregas",
                 ("Actividad", "Lenguaje", "Usuario", "Estudiante", "Archivo", "Estado",
                  "Similitud máxima", "Umbral de similitud", "Indicio de IA", "Umbral de IA", "IA declarada",
-                 "Crédito de IA", "Revisión de IA"),
+                 "Crédito de IA", "Revisión de IA", "Nota automática (0–50)", "Nota docente (0–50)", "Nota final (0–50)"),
                 submission_export_rows(conn, parameters),
             ),
         )
@@ -223,8 +228,38 @@ def submissions_list(request: Request, activity_id: ContextQuery = "", language_
         submissions = submission_page(conn, context_params(filters), page)
     return view(
         request, "submissions.html", user=user, **filters, submissions=submissions[:PAGE_SIZE],
-        page=page, has_next=len(submissions) > PAGE_SIZE,
+        page=page, has_next=len(submissions) > PAGE_SIZE, mail_ready=notices_enabled(),
     )
+
+
+@router.post("/avisos")
+def send_review_notices(
+    request: Request, csrf: Csrf,
+    selection: Annotated[list[UUID], Form()] = [], all_results: Annotated[bool, Form()] = False,
+    activity_id: Annotated[str, Form(max_length=19)] = "",
+    language_id: Annotated[str, Form(max_length=19)] = "", alerts_only: Annotated[bool, Form()] = False,
+    destination: Annotated[Literal["reports", "submissions"], Form()] = "reports",
+):
+    with request.app.state.pool.connection() as conn:
+        user = administrator(conn, request, csrf)
+        if not notices_enabled():
+            raise HTTPException(409, "Configura SMTP y el remitente para enviar avisos.")
+        activity, language = optional_context_id(activity_id), optional_context_id(language_id)
+        ids = None if all_results else sorted(set(selection))
+        rows = conn.execute(
+            """SELECT s.id, s.student_id FROM submissions s
+               JOIN activities a ON a.id = s.activity_id JOIN languages l ON l.id = s.language_id
+               CROSS JOIN settings cfg""" + SUBMISSION_FILTER + " AND (%s::uuid[] IS NULL OR s.id = ANY(%s))",
+            (activity, activity, language, language, alerts_only, ids, ids),
+        ).fetchall()
+        if not rows:
+            raise HTTPException(400, "Selecciona al menos un archivo.")
+        if ids is not None and len(rows) != len(ids):
+            raise HTTPException(409, "La selección cambió. Vuelve a seleccionar los archivos.")
+        students = sorted({row["student_id"] for row in rows})
+        queued = enqueue_manual(conn, students)
+    return view(request, "notices-result.html", user=user, queued=queued, skipped=len(students) - queued,
+                destination="/admin/" + destination)
 
 
 def submission_metadata(conn, submission_id: UUID):
@@ -361,15 +396,9 @@ def submission_report(request: Request, submission_id: UUID):
                JOIN users u ON u.id = s.student_id CROSS JOIN settings cfg WHERE s.id = %s""",
             (submission_id,),
         ).fetchone()
-    if not submission:
-        raise HTTPException(404, "Entrega no encontrada.")
-    mail = quote(f"Revisión de tu entrega en {submission['code']}", safe="")
-    body = quote(
-        f"Hola,\r\n\r\nRevisa el estado de tu archivo {submission['filename']} "
-        f"en la actividad {submission['code']} de Paridad. Podemos conversar sobre tu proceso de trabajo.\r\n",
-        safe="",
-    )
-    return view(request, "submission.html", user=user, submission=submission, draft=f"mailto:?subject={mail}&body={body}")
+        grade = get_grade(conn, submission_id)
+    return view(request, "submission.html", user=user, submission=submission, grade=grade,
+                mail_ready=notices_enabled())
 
 
 @router.post("/submissions/{submission_id}/retry")

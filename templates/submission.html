@@ -1,13 +1,14 @@
 {% extends "base.html" %}
 {% from "macros.html" import csrf %}
 {% from "report-components.html" import file_actions %}
+{% from "grade-components.html" import grade_breakdown, clarification_content %}
 {% block title %}{{ submission.filename }} · Paridad{% endblock %}
 {% block content %}
 <div class="page-heading">
   <a href="/admin/submissions">Volver a archivos</a>
   <h1>{{ submission.filename }}</h1>
   <p>{{ submission.display_name }} ({{ submission.username }}) · {{ submission.code }} · {{ submission.language }}</p>
-  {{ file_actions(submission, false) }}
+  {{ file_actions(submission, user, mail_ready, false, 'submissions') }}
 </div>
 <section class="card">
   <h2>Resultado del análisis</h2>
@@ -36,8 +37,50 @@
       <button class="button" type="submit">Reintentar análisis</button>
     </form>
   {% endif %}
-  <p><a class="button secondary" href="{{ draft }}">Preparar aviso en el correo</a></p>
 </section>
+<div class="grid-two section-gap">
+  <section class="card" id="nota">
+    <h2>Nota</h2>
+    {{ grade_breakdown(grade) }}
+    {% if grade.state == 'completed' %}
+    <details class="record-disclosure">
+      <summary>Ajustar nota</summary>
+      <form class="stack record-form" action="/admin/submissions/{{ grade.id }}/nota" method="post">
+        {{ csrf(user) }}
+        <label>Nota docente (0 a 50)
+          <input type="number" name="grade" min="0" max="50" value="{{ grade.grade_override if grade.grade_override is not none else '' }}">
+        </label>
+        <p class="field-help">Deja la nota vacía para usar la nota automática.</p>
+        <label>Comentario para el estudiante
+          <textarea rows="3" maxlength="1500" name="note" required></textarea>
+        </label>
+        <button class="button" type="submit">Guardar nota</button>
+      </form>
+    </details>
+    {% endif %}
+  </section>
+  {% if grade.clarification_status %}
+  <section class="card" id="aclaracion">
+    <h2>Aclaración solicitada</h2>
+    {{ clarification_content(grade) }}
+    {% if grade.clarification_status == 'pending' %}
+    <form class="stack" action="/admin/submissions/{{ grade.id }}/aclaracion" method="post">
+      {{ csrf(user) }}
+      <label>Respuesta al estudiante
+        <textarea name="response" rows="4" maxlength="1500" required></textarea>
+      </label>
+      <label>Nueva nota (opcional)
+        <input type="number" name="grade" min="0" max="50">
+      </label>
+      <div class="filter-actions">
+        <button class="button" name="decision" value="resolved" type="submit">Resolver</button>
+        <button class="button secondary" name="decision" value="rejected" type="submit">Rechazar</button>
+      </div>
+    </form>
+    {% endif %}
+  </section>
+  {% endif %}
+</div>
 <details class="card section-gap panel-disclosure" open>
   <summary>Código de la entrega</summary>
   <div class="disclosure-content"><pre tabindex="0"><code>{{ submission.source }}</code></pre></div>

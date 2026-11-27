@@ -55,6 +55,14 @@ En **Archivos**, abre **Acciones** para ver, descargar o eliminar una entrega. M
 
 En **Informes**, **Descargar Excel** aplica los filtros de actividad, lenguaje y alertas a todas las páginas. El libro incluye las comparaciones entre pares y los resultados de cada entrega, con porcentajes y umbrales. Los grupos reúnen archivos de la misma actividad y lenguaje conectados por coincidencias que superan el umbral. Los grupos más similares aparecen primero. Abre **Comparaciones individuales** para ver los fragmentos de cada par.
 
+## Notas, avisos y aclaraciones
+
+Cada estudiante puede tener hasta tres archivos en total. El administrador puede liberar cupo eliminando una entrega. Los archivos históricos se conservan. La nota automática combina estructura (15 puntos), buenas prácticas y nombres legibles (10), comentarios en inglés (10) y similitud (15). El criterio de inglés usa una heurística de vocabulario y asigna cero si faltan comentarios. La similitud reduce progresivamente sus puntos a medida que aumenta el porcentaje. Los indicios de IA se usan para avisos de revisión. El análisis estático evalúa el texto y la estructura del archivo sin ejecutar el programa.
+
+El estudiante consulta el desglose desde su historial y puede solicitar una aclaración por archivo. En **Informes → Aclaraciones**, el administrador puede responder, resolver o rechazar la solicitud y ajustar la nota. El Excel distingue la nota automática, la docente y la final.
+
+En **Informes → Avisos** puedes seleccionar entregas y enviar un correo por estudiante. El menú **Acciones** permite enviar un aviso individual. Para enviar avisos manuales y automáticos, configura SMTP y `PARIDAD_NOTICE_FROM` en la instalación. [Configuración de correo](docs/despliegue-moodle.md#avisos-de-revisión-e-invitaciones-por-correo)
+
 ## Estructura
 
 ```text

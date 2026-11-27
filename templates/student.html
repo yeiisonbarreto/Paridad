@@ -1,5 +1,6 @@
 {% extends "base.html" %}
 {% from "macros.html" import csrf, pagination %}
+{% from "grade-components.html" import clarification_status %}
 {% block title %}Mis entregas · Paridad{% endblock %}
 {% block head %}<script src="/static/student.min.js" defer></script>{% endblock %}
 {% block content %}
@@ -10,7 +11,8 @@
 <div class="student-layout">
   <details class="card panel-disclosure" open>
     <summary>Subir archivo</summary>
-    {% if activities %}
+    {% if upload_count >= upload_limit %}<p class="muted disclosure-content">Alcanzaste el máximo de tres archivos.</p>
+    {% elif activities %}
     <form action="/student/submissions" method="post" enctype="multipart/form-data" class="stack disclosure-content" id="submission-form">
       {{ csrf(user) }}
       <input type="hidden" name="request_id" value="{{ request_id }}">
@@ -34,7 +36,7 @@
       <label>Archivo de código
         <input type="file" name="file" id="source" required aria-describedby="file-help">
       </label>
-      <p class="field-help" id="file-help">Texto UTF-8 de hasta 128 KiB y 8000 tokens.</p>
+      <p class="field-help" id="file-help">Texto UTF-8 de hasta 128 KiB y 8000 tokens. Incluye comentarios en inglés. {{ upload_count }} de {{ upload_limit }} archivos subidos.</p>
       <label class="check"><input type="checkbox" name="ai_declared" id="ai-declared" value="true"> Usé una herramienta de IA</label>
       <label class="credit-field">Crédito de IA
         <textarea name="ai_credit" id="ai-credit" maxlength="1000" rows="3" placeholder="Herramienta y tipo de ayuda"></textarea>
@@ -50,7 +52,7 @@
       {% if results %}
       <div class="table-wrap" tabindex="0" role="region" aria-label="Resultados de mis entregas">
         <table>
-          <thead><tr><th scope="col">Archivo</th><th scope="col">Similitud máxima</th><th scope="col">Indicio de IA</th></tr></thead>
+          <thead><tr><th scope="col">Archivo</th><th scope="col">Similitud máxima</th><th scope="col">Indicio de IA</th><th scope="col">Nota</th></tr></thead>
           <tbody>
           {% for result in results %}
           <tr>
@@ -65,6 +67,13 @@
               </td>
             {% elif result.state == 'pending' %}<td colspan="2"><span class="tag pending">En análisis</span></td>
             {% else %}<td colspan="2"><span class="tag alert">Análisis fallido</span></td>{% endif %}
+            <td>
+              {% if result.grade is not none %}
+              <a href="/student/submissions/{{ result.id }}/nota" aria-label="Ver nota de {{ result.filename }}">{{ result.grade }} / 50</a>
+              {{ clarification_status(result.clarification_status) }}
+              {% if not result.clarification_status %}<a class="table-detail" href="/student/submissions/{{ result.id }}/nota">Pedir aclaración</a>{% endif %}
+              {% else %}—{% endif %}
+            </td>
           </tr>
           {% endfor %}
           </tbody>
