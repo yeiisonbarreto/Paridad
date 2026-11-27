@@ -1,0 +1,22 @@
+{% extends "base.html" %}
+{% from "macros.html" import csrf %}
+{% block title %}Eliminar selección · Paridad{% endblock %}
+{% block content %}
+{% set accounts = kind == 'accounts' %}
+{% set destination = '/admin/accounts' if accounts else '/admin/submissions' %}
+<section class="card narrow">
+  <h1>Eliminar selección</h1>
+  <p>{{ count }} {{ ('cuenta' if count == 1 else 'cuentas') if accounts else ('archivo' if count == 1 else 'archivos') }}</p>
+  {% if accounts %}<p>Se eliminarán las cuentas seleccionadas, sus entregas y las comparaciones vinculadas.</p>
+  {% else %}<p>Se eliminarán los archivos seleccionados y sus comparaciones.</p>{% endif %}
+  <p>Paridad actualizará la similitud de las entregas afectadas.</p>
+  <form action="{{ destination }}/lote/eliminar" method="post">
+    {{ csrf(user) }}
+    <input type="hidden" name="token" value="{{ token }}">
+    <div class="account-actions">
+      <button type="submit" class="button danger">Eliminar definitivamente</button>
+      <a href="{{ destination }}" class="button secondary">Cancelar</a>
+    </div>
+  </form>
+</section>
+{% endblock %}

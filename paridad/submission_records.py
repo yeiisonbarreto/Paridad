@@ -3,6 +3,16 @@
 from uuid import UUID
 
 
+def lock_submission_scopes(conn, submission_ids: list[UUID]) -> None:
+    conn.execute(
+        """SELECT al.activity_id, al.language_id FROM activity_languages al
+           WHERE EXISTS (SELECT 1 FROM submissions s WHERE s.id = ANY(%s)
+               AND s.activity_id = al.activity_id AND s.language_id = al.language_id)
+           ORDER BY al.activity_id, al.language_id FOR NO KEY UPDATE OF al""",
+        (submission_ids,),
+    ).fetchall()
+
+
 def delete_submissions(conn, submission_ids: list[UUID]) -> None:
     """The caller holds the activity/language locks for these submissions."""
     if not submission_ids:

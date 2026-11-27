@@ -2,18 +2,20 @@
 
 import secrets
 import smtplib
-from typing import Annotated
+from typing import Annotated, Literal
+from uuid import UUID
 
 from fastapi import APIRouter, File, Form, HTTPException, Request, UploadFile
 from psycopg import errors
 from starlette.responses import Response
 
 from .admin import Csrf, Name, PAGE_SIZE, Page, administrator, required_text
+from .bulk import consume_deletion, deletion_preview
 from .config import MAX_FILE_BYTES
 from .invitations import create_invitation, mail_enabled, send_invitation_email
 from .roster import MAX_ROSTER_ROWS, XLSX_MEDIA_TYPE, RosterError, parse_roster, workbook_bytes
 from .security import PASSWORDS, USERNAME, check_rate, normalized_email, normalized_username, token_digest, valid_password
-from .submission_records import delete_submissions
+from .submission_records import delete_submissions, lock_submission_scopes
 from .web import redirect, view
 
 router = APIRouter(prefix="/admin/accounts")
@@ -135,6 +137,60 @@ def create_account(
     return redirect("/admin/accounts")
 
 
+def selected_students(conn, ids: list[int] | None, *, lock: bool = False) -> list[int]:
+    query = "SELECT id FROM users WHERE role = 'STUDENT' AND (%s::bigint[] IS NULL OR id = ANY(%s)) ORDER BY id"
+    if lock:
+        query += " FOR NO KEY UPDATE"
+    return [row["id"] for row in conn.execute(query, (ids, ids))]
+
+
+def remove_student_accounts(conn, ids: list[int]) -> None:
+    # The caller has locked the selected students, so their uploads cannot change.
+    submissions = [row["id"] for row in conn.execute(
+        "SELECT id FROM submissions WHERE student_id = ANY(%s)", (ids,),
+    )]
+    if submissions:
+        lock_submission_scopes(conn, submissions)
+        delete_submissions(conn, submissions)
+    conn.execute("DELETE FROM users WHERE role = 'STUDENT' AND id = ANY(%s)", (ids,))
+
+
+@router.post("/lote")
+def bulk_accounts(
+    request: Request, csrf: Csrf, action: Annotated[Literal["disable", "enable", "delete"], Form()],
+    selection: Annotated[list[int], Form()] = [], all_results: Annotated[bool, Form()] = False,
+):
+    with request.app.state.pool.connection() as conn:
+        user = administrator(conn, request, csrf)
+        requested = None if all_results else sorted(set(selection))
+        if requested is not None and any(not 0 < item < 2**63 for item in requested):
+            raise HTTPException(400, "Selección inválida.")
+        ids = selected_students(conn, requested, lock=action != "delete")
+        if requested is not None and requested != ids:
+            raise HTTPException(409, "La selección cambió. Vuelve a seleccionar las cuentas.")
+        if not ids:
+            raise HTTPException(400, "Selecciona al menos una cuenta.")
+        if action == "delete":
+            return deletion_preview(conn, request, user, "accounts", ids)
+        active = action == "enable"
+        conn.execute("UPDATE users SET active = %s WHERE role = 'STUDENT' AND id = ANY(%s)", (active, ids))
+        if not active:
+            conn.execute("DELETE FROM sessions WHERE user_id = ANY(%s)", (ids,))
+            conn.execute("DELETE FROM student_invitations WHERE user_id = ANY(%s)", (ids,))
+    return redirect("/admin/accounts")
+
+
+@router.post("/lote/eliminar")
+def confirm_bulk_account_deletion(request: Request, csrf: Csrf, token: Annotated[UUID, Form()]):
+    with request.app.state.pool.connection() as conn:
+        user = administrator(conn, request, csrf)
+        selection = [int(item) for item in consume_deletion(conn, user["id"], "accounts", token)]
+        ids = selected_students(conn, selection, lock=True)
+        if ids:
+            remove_student_accounts(conn, ids)
+    return redirect("/admin/accounts")
+
+
 @router.post("/{student_id}")
 def update_account(
     request: Request, student_id: int, csrf: Csrf, display_name: Name,
@@ -215,17 +271,5 @@ def delete_account(
         student = student_account(conn, student_id, lock=True)
         if confirmation.strip() != student["username"]:
             raise HTTPException(400, "Escribe el ID del estudiante para confirmar la eliminación.")
-        # Serialize with uploads and the comparison worker across all affected scopes.
-        conn.execute(
-            """SELECT al.activity_id, al.language_id FROM activity_languages al
-               WHERE EXISTS (SELECT 1 FROM submissions s
-                   WHERE s.student_id = %s AND s.activity_id = al.activity_id AND s.language_id = al.language_id)
-               ORDER BY al.activity_id, al.language_id FOR NO KEY UPDATE OF al""",
-            (student_id,),
-        ).fetchall()
-        submissions = conn.execute(
-            "SELECT id FROM submissions WHERE student_id = %s", (student_id,),
-        ).fetchall()
-        delete_submissions(conn, [submission["id"] for submission in submissions])
-        conn.execute("DELETE FROM users WHERE id = %s AND role = 'STUDENT'", (student_id,))
+        remove_student_accounts(conn, [student_id])
     return redirect("/admin/accounts")

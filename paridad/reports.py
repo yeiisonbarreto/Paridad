@@ -1,15 +1,19 @@
 """Administrative reports, grouped similarities and file management."""
 
 import re
+from typing import Annotated, Literal
 from urllib.parse import quote
 from uuid import UUID
 
-from fastapi import APIRouter, HTTPException, Request
-from starlette.responses import Response
+from fastapi import APIRouter, Form, HTTPException, Request
+from starlette.responses import Response, StreamingResponse
 
 from .admin import ContextQuery, Csrf, PAGE_SIZE, Page, administrator
+from .bulk import consume_deletion, deletion_preview
+from .file_archives import submission_bytes, submission_zip
+from .report_excel import MAX_SHEET_ROWS, XLSX_MEDIA_TYPE, Percentage, report_excel
 from .similarity_groups import similarity_groups
-from .submission_records import delete_submissions
+from .submission_records import delete_submissions, lock_submission_scopes
 from .web import redirect, view
 
 router = APIRouter(prefix="/admin")
@@ -17,9 +21,31 @@ router = APIRouter(prefix="/admin")
 SUBMISSION_LIST = """
     SELECT s.id, s.filename, s.state, s.ai_bp, s.ai_credit IS NOT NULL AS declared,
            a.code, l.name AS language, u.display_name, u.username,
+           s.max_similarity_bp, s.ai_credit, COALESCE(a.ai_threshold, cfg.ai_threshold) AS ai_threshold,
+           COALESCE(a.similarity_threshold, cfg.similarity_threshold) AS similarity_threshold,
            s.ai_credit IS NULL AND s.ai_bp > 100 * COALESCE(a.ai_threshold, cfg.ai_threshold) AS alert
     FROM submissions s JOIN activities a ON a.id = s.activity_id JOIN languages l ON l.id = s.language_id
     JOIN users u ON u.id = s.student_id CROSS JOIN settings cfg
+"""
+
+
+SUBMISSION_FILTER = """
+    WHERE (%s::bigint IS NULL OR a.id = %s) AND (%s::bigint IS NULL OR l.id = %s)
+      AND (NOT %s OR (s.ai_credit IS NULL AND s.ai_bp > 100 * COALESCE(a.ai_threshold, cfg.ai_threshold)))
+"""
+
+PAIR_LIST = """
+    SELECT p.left_id, p.right_id, p.score_bp, a.code, l.name AS language,
+           ul.display_name AS left_name, ul.username AS left_username, sl.filename AS left_filename,
+           ur.display_name AS right_name, ur.username AS right_username, sr.filename AS right_filename,
+           COALESCE(a.similarity_threshold, cfg.similarity_threshold) AS similarity_threshold,
+           p.score_bp > 100 * COALESCE(a.similarity_threshold, cfg.similarity_threshold) AS alert
+    FROM similarity_pairs p JOIN activities a ON a.id = p.activity_id
+    JOIN languages l ON l.id = p.language_id JOIN users ul ON ul.id = p.left_student_id
+    JOIN users ur ON ur.id = p.right_student_id
+    JOIN submissions sl ON sl.id = p.left_id JOIN submissions sr ON sr.id = p.right_id CROSS JOIN settings cfg
+    WHERE (%s::bigint IS NULL OR a.id = %s) AND (%s::bigint IS NULL OR l.id = %s)
+      AND (NOT %s OR p.score_bp > 100 * COALESCE(a.similarity_threshold, cfg.similarity_threshold))
 """
 
 
@@ -47,10 +73,7 @@ def context_params(filters: dict) -> tuple:
 
 def submission_page(conn, context, page: int, *, alerts_only: bool = False):
     return conn.execute(
-        SUBMISSION_LIST + """
-           WHERE (%s::bigint IS NULL OR a.id = %s) AND (%s::bigint IS NULL OR l.id = %s)
-             AND (NOT %s OR (s.ai_credit IS NULL AND s.ai_bp > 100 * COALESCE(a.ai_threshold, cfg.ai_threshold)))
-           ORDER BY s.created_at DESC, s.id DESC LIMIT %s OFFSET %s""",
+        SUBMISSION_LIST + SUBMISSION_FILTER + " ORDER BY s.created_at DESC, s.id DESC LIMIT %s OFFSET %s",
         (*context, alerts_only, PAGE_SIZE + 1, (page - 1) * PAGE_SIZE),
     ).fetchall()
 
@@ -107,16 +130,7 @@ def reports(
         context = context_params(filters)
         groups, groups_next = group_page(conn, filters, context, page)
         pairs = conn.execute(
-            """SELECT p.left_id, p.right_id, p.score_bp, a.code, l.name AS language,
-                      ul.display_name AS left_name, ul.username AS left_username,
-                      ur.display_name AS right_name, ur.username AS right_username,
-                      p.score_bp > 100 * COALESCE(a.similarity_threshold, cfg.similarity_threshold) AS alert
-               FROM similarity_pairs p JOIN activities a ON a.id = p.activity_id
-               JOIN languages l ON l.id = p.language_id JOIN users ul ON ul.id = p.left_student_id
-               JOIN users ur ON ur.id = p.right_student_id CROSS JOIN settings cfg
-               WHERE (%s::bigint IS NULL OR a.id = %s) AND (%s::bigint IS NULL OR l.id = %s)
-                 AND (NOT %s OR p.score_bp > 100 * COALESCE(a.similarity_threshold, cfg.similarity_threshold))
-               ORDER BY p.score_bp DESC, p.left_id, p.right_id LIMIT %s OFFSET %s""",
+            PAIR_LIST + " ORDER BY p.score_bp DESC, p.left_id, p.right_id LIMIT %s OFFSET %s",
             (*context, alerts_only, PAGE_SIZE + 1, (page - 1) * PAGE_SIZE),
         ).fetchall()
         submissions = submission_page(conn, context, page, alerts_only=alerts_only)
@@ -124,6 +138,80 @@ def reports(
         request, "reports.html", user=user, **filters, alerts_only=alerts_only, groups=groups,
         pairs=pairs[:PAGE_SIZE], submissions=submissions[:PAGE_SIZE], page=page,
         has_next=groups_next or len(pairs) > PAGE_SIZE or len(submissions) > PAGE_SIZE,
+    )
+
+
+def comparison_export_rows(conn, parameters):
+    with conn.cursor(name="report_excel_pairs") as cursor:
+        cursor.itersize = 400
+        cursor.execute(PAIR_LIST + " ORDER BY p.score_bp DESC, p.left_id, p.right_id LIMIT %s",
+                       (*parameters, MAX_SHEET_ROWS - 1))
+        for item in cursor:
+            yield (
+                item["code"], item["language"], item["left_username"], item["left_name"], item["left_filename"],
+                item["right_username"], item["right_name"], item["right_filename"],
+                Percentage(item["score_bp"]), Percentage(item["similarity_threshold"] * 100),
+                "Revisión" if item["alert"] else "Dentro del umbral",
+            )
+
+
+def submission_export_rows(conn, parameters):
+    with conn.cursor(name="report_excel_submissions") as cursor:
+        cursor.itersize = 400
+        cursor.execute(SUBMISSION_LIST + SUBMISSION_FILTER + " ORDER BY s.created_at DESC, s.id DESC LIMIT %s",
+                       (*parameters, MAX_SHEET_ROWS - 1))
+        for item in cursor:
+            completed = item["state"] == "completed"
+            yield (
+                item["code"], item["language"], item["username"], item["display_name"], item["filename"],
+                {"completed": "Analizado", "pending": "En análisis", "failed": "Análisis fallido"}[item["state"]],
+                Percentage(item["max_similarity_bp"]) if completed else None,
+                Percentage(item["similarity_threshold"] * 100),
+                Percentage(item["ai_bp"]) if completed else None, Percentage(item["ai_threshold"] * 100),
+                "Sí" if item["declared"] else "No", item["ai_credit"],
+                "Revisión" if item["alert"] else None,
+            )
+
+
+def export_workbook(pool, parameters):
+    with pool.connection() as conn:
+        conn.execute("SET TRANSACTION ISOLATION LEVEL REPEATABLE READ")
+        sheets = (
+            (
+                "Comparaciones",
+                ("Actividad", "Lenguaje", "Usuario A", "Estudiante A", "Archivo A", "Usuario B", "Estudiante B",
+                 "Archivo B", "Similitud", "Umbral de similitud", "Estado"),
+                comparison_export_rows(conn, parameters),
+            ),
+            (
+                "Entregas",
+                ("Actividad", "Lenguaje", "Usuario", "Estudiante", "Archivo", "Estado",
+                 "Similitud máxima", "Umbral de similitud", "Indicio de IA", "Umbral de IA", "IA declarada",
+                 "Crédito de IA", "Revisión de IA"),
+                submission_export_rows(conn, parameters),
+            ),
+        )
+        yield from report_excel(sheets)
+
+
+@router.get("/reports/exportar")
+def export_reports(request: Request, activity_id: ContextQuery = "", language_id: ContextQuery = "",
+                   alerts_only: bool = False):
+    pool = request.app.state.pool
+    with pool.connection() as conn:
+        administrator(conn, request)
+        activity, language = optional_context_id(activity_id), optional_context_id(language_id)
+        parameters = (activity, activity, language, language, alerts_only)
+        for query in (PAIR_LIST, SUBMISSION_LIST + SUBMISSION_FILTER):
+            count = conn.execute(
+                f"SELECT count(*) AS total FROM ({query} LIMIT %s) AS report_rows",
+                (*parameters, MAX_SHEET_ROWS),
+            ).fetchone()["total"]
+            if count >= MAX_SHEET_ROWS:
+                raise HTTPException(413, "El informe supera el tamaño de una hoja de Excel. Aplica filtros.")
+    return StreamingResponse(
+        export_workbook(pool, parameters), media_type=XLSX_MEDIA_TYPE,
+        headers={"Content-Disposition": 'attachment; filename="paridad-informes.xlsx"'},
     )
 
 
@@ -150,6 +238,46 @@ def submission_metadata(conn, submission_id: UUID):
     return submission
 
 
+@router.post("/submissions/lote")
+def bulk_submissions(
+    request: Request, csrf: Csrf, action: Annotated[Literal["zip", "delete"], Form()],
+    selection: Annotated[list[UUID], Form()] = [], all_results: Annotated[bool, Form()] = False,
+    activity_id: Annotated[str, Form(max_length=19)] = "",
+    language_id: Annotated[str, Form(max_length=19)] = "",
+):
+    pool = request.app.state.pool
+    with pool.connection() as conn:
+        user = administrator(conn, request, csrf)
+        activity, language = optional_context_id(activity_id), optional_context_id(language_id)
+        requested = None if all_results else sorted(set(selection))
+        ids = [row["id"] for row in conn.execute(
+            """SELECT id FROM submissions WHERE (%s::bigint IS NULL OR activity_id = %s)
+                 AND (%s::bigint IS NULL OR language_id = %s)
+                 AND (%s::uuid[] IS NULL OR id = ANY(%s)) ORDER BY id""",
+            (activity, activity, language, language, requested, requested),
+        )]
+        if requested is not None and ids != requested:
+            raise HTTPException(409, "La selección cambió. Vuelve a seleccionar los archivos.")
+        if not ids:
+            raise HTTPException(400, "Selecciona al menos un archivo.")
+        if action == "delete":
+            return deletion_preview(conn, request, user, "submissions", ids)
+    return StreamingResponse(
+        submission_zip(pool, ids), media_type="application/zip",
+        headers={"Content-Disposition": 'attachment; filename="paridad-archivos.zip"'},
+    )
+
+
+@router.post("/submissions/lote/eliminar")
+def confirm_bulk_submission_deletion(request: Request, csrf: Csrf, token: Annotated[UUID, Form()]):
+    with request.app.state.pool.connection() as conn:
+        user = administrator(conn, request, csrf)
+        ids = [UUID(item) for item in consume_deletion(conn, user["id"], "submissions", token)]
+        lock_submission_scopes(conn, ids)
+        delete_submissions(conn, ids)
+    return redirect("/admin/submissions")
+
+
 @router.get("/submissions/{submission_id}/descargar")
 def download_submission(request: Request, submission_id: UUID):
     with request.app.state.pool.connection() as conn:
@@ -160,9 +288,7 @@ def download_submission(request: Request, submission_id: UUID):
         ).fetchone()
     if not submission:
         raise HTTPException(404, "Entrega no encontrada.")
-    contents = submission["source_bytes"]
-    if contents is None:
-        contents = submission["source"].encode("utf-8")
+    contents = submission_bytes(submission)
     filename = quote(submission["filename"], safe="")
     return Response(
         contents, media_type="application/octet-stream",
@@ -182,13 +308,7 @@ def confirm_submission_delete(request: Request, submission_id: UUID):
 def remove_submission(request: Request, submission_id: UUID, csrf: Csrf):
     with request.app.state.pool.connection() as conn:
         administrator(conn, request, csrf)
-        submission = submission_metadata(conn, submission_id)
-        # Match the scope lock of uploads and the worker before deleting results.
-        conn.execute(
-            """SELECT activity_id FROM activity_languages WHERE activity_id = %s AND language_id = %s
-               FOR NO KEY UPDATE""",
-            (submission["activity_id"], submission["language_id"]),
-        ).fetchone()
+        lock_submission_scopes(conn, [submission_id])
         submission_metadata(conn, submission_id)
         delete_submissions(conn, [submission_id])
     return redirect("/admin/submissions")

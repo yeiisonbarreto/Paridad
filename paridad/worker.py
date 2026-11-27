@@ -120,6 +120,7 @@ def run() -> None:
                     with pool.connection() as conn:
                         conn.execute("DELETE FROM sessions WHERE expires_at <= now()")
                         conn.execute("DELETE FROM student_invitations WHERE expires_at <= now()")
+                        conn.execute("DELETE FROM bulk_deletions WHERE expires_at <= now()")
                         conn.execute("DELETE FROM rate_limits WHERE window_start < now() - interval '1 day'")
                     next_cleanup = monotonic() + 300
                 with pool.connection() as conn:

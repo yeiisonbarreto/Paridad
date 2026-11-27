@@ -1,5 +1,5 @@
 {% extends "base.html" %}
-{% from "macros.html" import csrf, pagination %}
+{% from "macros.html" import bulk_controls, csrf, pagination %}
 {% block title %}Cuentas · Paridad{% endblock %}
 {% block content %}
 <div class="page-heading"><h1>Cuentas de estudiantes</h1></div>
@@ -38,7 +38,16 @@
   <section class="card">
     <h2>Gestionar cuentas</h2>
     {% if not mail_enabled %}<p class="muted">Las invitaciones por correo requieren SMTP y HTTPS.</p>{% endif %}
+    {% if students %}
+    <form action="/admin/accounts/lote" method="post" id="account-selection" class="bulk-toolbar" data-bulk-selection>
+      {{ csrf(user) }}
+      {{ bulk_controls('Todas las cuentas', [('disable', 'Inhabilitar'), ('enable', 'Reactivar'), ('delete', 'Eliminar')]) }}
+    </form>
+    {% endif %}
     {% for student in students %}
+    <div class="selectable-record">
+      <input type="checkbox" name="selection" value="{{ student.id }}" form="account-selection"
+             data-bulk-item aria-label="Seleccionar {{ student.display_name }} ({{ student.username }})">
     <details class="record-disclosure" name="student-records">
       <summary>
         <span class="record-summary-text">
@@ -67,6 +76,7 @@
         <a href="/admin/accounts/{{ student.id }}/eliminar" class="button secondary danger">Eliminar cuenta</a>
       </div>
     </details>
+    </div>
     {% else %}<p class="empty">No hay cuentas de estudiantes en esta página.</p>{% endfor %}
     {{ pagination('/admin/accounts', page, has_next) }}
   </section>

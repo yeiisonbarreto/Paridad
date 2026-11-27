@@ -30,3 +30,15 @@
        width="1174" height="600" alt="Escuela Colombiana de Ingeniería Julio Garavito, Universidad"
        decoding="async">
 {% endmacro %}
+
+{% macro bulk_controls(all_label, actions) %}
+  <div class="bulk-scopes">
+    <label class="check" hidden data-page-selection><input type="checkbox" data-bulk-page> Toda esta página</label>
+    <label class="check"><input type="checkbox" name="all_results" value="true" data-bulk-all> {{ all_label }}</label>
+  </div>
+  <div class="bulk-actions">
+    {% for value, label in actions %}
+    <button type="submit" name="action" value="{{ value }}" class="button secondary{% if value == 'delete' %} danger{% endif %}">{{ label }}</button>
+    {% endfor %}
+  </div>
+{% endmacro %}

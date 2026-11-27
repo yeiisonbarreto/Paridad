@@ -35,9 +35,11 @@ El volumen `pgdata` conserva los datos al detener el proyecto. La aplicación y 
 
 Actualiza el código en la misma carpeta donde ya ejecutas Paridad y conserva su archivo `.env`. Después ejecuta `docker compose --env-file .env up -d --build --wait` desde esa carpeta. El servicio de migraciones aplicará el nuevo esquema sobre el volumen existente.
 
+Si el PNG original se llama `Logotipo Paridad_….png` y está junto a `Dockerfile`, Docker lo incorpora al reconstruir la imagen. También puedes colocarlo directamente en `static/paridad-logo.png`.
+
 ## Gestionar estudiantes
 
-Desde **Cuentas** puedes crear cuentas individuales, editar el correo y restablecer contraseñas. Para inhabilitar una cuenta, desmarca **Permitir iniciar sesión** y guarda el cambio. Paridad cierra las sesiones de la cuenta inhabilitada. La eliminación requiere escribir el ID y borra la cuenta, sus entregas y las comparaciones asociadas. El historial del resto de estudiantes refleja el nuevo máximo de similitud.
+Desde **Cuentas** puedes crear cuentas individuales, editar el correo y restablecer contraseñas. Para inhabilitar una cuenta, desmarca **Permitir iniciar sesión** y guarda el cambio. Paridad cierra las sesiones de la cuenta inhabilitada. La eliminación requiere escribir el ID y borra la cuenta, sus entregas y las comparaciones asociadas. El historial del resto de estudiantes refleja el nuevo máximo de similitud. Las casillas permiten inhabilitar, reactivar o eliminar varias cuentas a la vez. La eliminación en lote pide confirmación.
 
 Para importar, descarga la plantilla en **Cuentas → Importar estudiantes**. Completa las columnas `ID`, `Nombre` y `Correo` en la primera hoja y sube el archivo `.xlsx`. Puedes importar hasta 200 filas y 128 KiB por archivo. Guarda los IDs con ceros iniciales como texto. Si un ID o correo está repetido o hay una fila inválida, se rechaza el archivo completo y se indica la fila.
 
@@ -49,9 +51,9 @@ Para que un estudiante elija su propia contraseña, configura el envío SMTP des
 
 Desde el menú de la cuenta, abre **Mi cuenta**. Para cambiar el usuario o la contraseña, confirma tu contraseña actual. Paridad cierra las otras sesiones de esa cuenta y renueva la sesión actual.
 
-En **Archivos** e **Informes**, usa **Ver**, **Descargar** o **Eliminar** para cada entrega. Eliminar quita solo la entrega seleccionada y sus comparaciones. El historial de los estudiantes afectados se recalcula. Paridad guarda los bytes originales de las nuevas entregas. Las entregas anteriores a esta actualización se descargan como texto UTF-8 a partir del código almacenado.
+En **Archivos**, abre **Acciones** para ver, descargar o eliminar una entrega. Marca varias entregas para descargarlas en un ZIP o eliminarlas tras confirmar. **Todos los archivos del filtro** abarca todas sus páginas. Al eliminar una entrega también se eliminan sus comparaciones. El historial de los estudiantes afectados se recalcula. Paridad guarda los bytes originales de las nuevas entregas. Las entregas anteriores a esta actualización se descargan como texto UTF-8 a partir del código almacenado.
 
-En **Informes**, los grupos reúnen archivos de la misma actividad y lenguaje conectados por coincidencias que superan el umbral. Los grupos más similares aparecen primero. Abre **Comparaciones individuales** para ver los fragmentos de cada par.
+En **Informes**, **Descargar Excel** aplica los filtros de actividad, lenguaje y alertas a todas las páginas. El libro incluye las comparaciones entre pares y los resultados de cada entrega, con porcentajes y umbrales. Los grupos reúnen archivos de la misma actividad y lenguaje conectados por coincidencias que superan el umbral. Los grupos más similares aparecen primero. Abre **Comparaciones individuales** para ver los fragmentos de cada par.
 
 ## Estructura
 

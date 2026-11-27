@@ -1,7 +1,10 @@
 {% macro results_filters(path, labs, languages, activity, language, alerts=none) %}
-<details class="card panel-disclosure"{% if activity or language or alerts %} open{% endif %}>
+{% set reports = alerts is not none %}
+{% if reports %}<section class="card" aria-label="Filtros de informes">
+{% else %}<details class="card panel-disclosure"{% if activity or language %} open{% endif %}>
   <summary>Filtros</summary>
-  <form class="filters disclosure-content" action="{{ path }}" method="get">
+{% endif %}
+  <form class="filters{% if not reports %} disclosure-content{% endif %}" action="{{ path }}" method="get">
     <div class="field">
       <label for="report-activity">Actividad</label>
       <select name="activity_id" id="report-activity">
@@ -19,9 +22,12 @@
     {% if alerts is not none %}
     <label class="check"><input name="alerts_only" type="checkbox" value="true" {% if alerts %}checked{% endif %}> Solo alertas</label>
     {% endif %}
-    <button class="button" type="submit">Filtrar</button>
+    <div class="filter-actions">
+      <button class="button" type="submit">Filtrar</button>
+      {% if reports %}<button class="button secondary" type="submit" formaction="/admin/reports/exportar">Descargar Excel</button>{% endif %}
+    </div>
   </form>
-</details>
+{% if reports %}</section>{% else %}</details>{% endif %}
 {% endmacro %}
 
 {% macro file_actions(item, include_view=true) %}
@@ -32,12 +38,13 @@
 </div>
 {% endmacro %}
 
-{% macro submission_table(submissions, grouped=false) %}
+{% macro submission_table(submissions, grouped=false, selection_form=none) %}
 {% if submissions %}
 <div class="table-wrap" tabindex="0" role="region" aria-label="{{ 'Archivos del grupo' if grouped else 'Archivos' }}">
 <table>
   <thead>
     <tr>
+      {% if selection_form %}<th scope="col" class="selection-column"><span class="screen-reader-only">Seleccionar</span></th>{% endif %}
       <th scope="col">Archivo</th>
       <th scope="col">Estudiante</th>
       {% if grouped %}<th scope="col">Similitud máxima</th>{% else %}<th scope="col">Actividad y lenguaje</th>{% endif %}
@@ -48,6 +55,10 @@
   <tbody>
     {% for item in submissions %}
     <tr>
+      {% if selection_form %}
+      <td class="selection-column"><input type="checkbox" name="selection" value="{{ item.id }}"
+           form="{{ selection_form }}" data-bulk-item aria-label="Seleccionar {{ item.filename }}"></td>
+      {% endif %}
       <td>{{ item.filename }}</td>
       <td>{{ item.display_name }}<span class="table-detail">{{ item.username }}</span></td>
       {% if grouped %}<td class="numeric">{{ item.group_score|percent }}</td>
@@ -59,7 +70,14 @@
         {% elif item.state == 'pending' %}<span class="tag pending">En análisis</span>
         {% else %}<span class="tag alert">Análisis fallido</span>{% endif %}
       </td>
-      <td>{{ file_actions(item) }}</td>
+      <td>
+        {% if selection_form %}
+        <details class="file-menu" data-dropdown>
+          <summary aria-label="Acciones de {{ item.filename }}">Acciones</summary>
+          {{ file_actions(item) }}
+        </details>
+        {% else %}{{ file_actions(item) }}{% endif %}
+      </td>
     </tr>
     {% endfor %}
   </tbody>

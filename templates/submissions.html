@@ -1,12 +1,20 @@
 {% extends "base.html" %}
-{% from "macros.html" import pagination %}
+{% from "macros.html" import bulk_controls, csrf, pagination %}
 {% from "report-components.html" import results_filters, submission_table %}
 {% block title %}Archivos · Paridad{% endblock %}
 {% block content %}
 <div class="page-heading"><h1>Archivos subidos</h1></div>
 {{ results_filters('/admin/submissions', labs, languages, selected_activity, selected_language) }}
 <section class="card section-gap" aria-label="Archivos subidos">
-  {{ submission_table(submissions) }}
+  {% if submissions %}
+  <form action="/admin/submissions/lote" method="post" id="file-selection" class="bulk-toolbar" data-bulk-selection>
+    {{ csrf(user) }}
+    <input type="hidden" name="activity_id" value="{{ selected_activity or '' }}">
+    <input type="hidden" name="language_id" value="{{ selected_language or '' }}">
+    {{ bulk_controls('Todos los archivos del filtro', [('zip', 'Descargar ZIP'), ('delete', 'Eliminar')]) }}
+  </form>
+  {% endif %}
+  {{ submission_table(submissions, selection_form='file-selection') }}
   {{ pagination('/admin/submissions', page, has_next, ('&activity_id=' ~ selected_activity if selected_activity else '') ~ ('&language_id=' ~ selected_language if selected_language else '')) }}
 </section>
 {% endblock %}

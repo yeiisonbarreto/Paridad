@@ -31,3 +31,31 @@ document.addEventListener("keydown", event => {
     }
   }
 });
+
+for (const form of document.querySelectorAll("[data-bulk-selection]")) {
+  const page = form.querySelector("[data-bulk-page]");
+  const all = form.querySelector("[data-bulk-all]");
+  const items = Array.from(form.elements).filter(item => item.hasAttribute("data-bulk-item"));
+  const actions = form.querySelectorAll('button[type="submit"]');
+  form.querySelector("[data-page-selection]").hidden = false;
+
+  function updateSelection() {
+    const count = items.filter(item => item.checked).length;
+    page.checked = all.checked || count === items.length;
+    page.indeterminate = !all.checked && count > 0 && count < items.length;
+    page.disabled = all.checked;
+    for (const item of items) item.disabled = all.checked;
+    for (const action of actions) action.disabled = !all.checked && count === 0;
+  }
+
+  page.addEventListener("change", () => {
+    for (const item of items) item.checked = page.checked;
+    updateSelection();
+  });
+  all.addEventListener("change", () => {
+    if (all.checked) for (const item of items) item.checked = true;
+    updateSelection();
+  });
+  for (const item of items) item.addEventListener("change", updateSelection);
+  updateSelection();
+}

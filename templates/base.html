@@ -27,17 +27,11 @@
       {% elif request.url.path.startswith('/admin/submissions') %}{% set current = "Archivos" %}
       {% endif %}
       <nav class="section-nav" aria-label="Administración">
-        <details class="dropdown" name="header-menu" data-dropdown>
-          <summary class="menu-trigger" aria-label="Secciones de administración">
-            <span class="menu-symbol" aria-hidden="true"></span>
-            <span>{{ current }}</span>
-          </summary>
-          <ul class="menu-panel">
-            {% for url, label in [('/admin', 'Panel'), ('/admin/accounts', 'Cuentas'), ('/admin/activities', 'Actividades'), ('/admin/reports', 'Informes'), ('/admin/submissions', 'Archivos')] %}
-            <li><a href="{{ url }}" {% if current == label %}aria-current="page"{% endif %}>{{ label }}</a></li>
-            {% endfor %}
-          </ul>
-        </details>
+        <ul class="section-links">
+          {% for url, label in [('/admin', 'Panel'), ('/admin/accounts', 'Cuentas'), ('/admin/activities', 'Actividades'), ('/admin/reports', 'Informes'), ('/admin/submissions', 'Archivos')] %}
+          <li><a href="{{ url }}" {% if current == label %}aria-current="page"{% endif %}>{{ label }}</a></li>
+          {% endfor %}
+        </ul>
       </nav>
       {% endif %}
       {% if user %}

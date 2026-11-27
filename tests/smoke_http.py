@@ -10,6 +10,7 @@ from concurrent.futures import ThreadPoolExecutor
 from contextlib import ExitStack
 from io import BytesIO
 from uuid import uuid4
+from zipfile import ZipFile
 
 import httpx
 from openpyxl import Workbook, load_workbook
@@ -52,8 +53,8 @@ def login(client, username, password):
     return response.headers["location"]
 
 
-def post(client, path, token, status=303, **data):
-    return assert_status(client.post(path, data={"csrf": token, **data}), status)
+def post(client, path, csrf_token, status=303, **data):
+    return assert_status(client.post(path, data={"csrf": csrf_token, **data}), status)
 
 
 def upload(client, token, activity, language, filename, content, *, request_id=None, credit="", status=303):
@@ -205,6 +206,24 @@ def main():
             assert_status(first.get(link + "/descargar"), 403)
         assert_status(admin.get("/admin/reports?activity_id=&language_id="))
 
+        filters = {"activity_id": activity_id, "language_id": c_id, "alerts_only": "true"}
+        assert_status(first.get("/admin/reports/exportar", params=filters), 403)
+        export = assert_status(admin.get("/admin/reports/exportar", params=filters))
+        assert 'filename="paridad-informes.xlsx"' in export.headers["content-disposition"]
+        workbook = load_workbook(BytesIO(export.content))
+        try:
+            assert workbook.sheetnames == ["Comparaciones", "Entregas"]
+            pairs_sheet, submissions_sheet = workbook.worksheets
+            assert pairs_sheet["I2"].value == 1 and pairs_sheet["I2"].number_format == "0.00%"
+            assert pairs_sheet["J2"].value == 0.4 and pairs_sheet.max_row == 3
+            assert all(row[0] == lab and row[1] == "C" for row in submissions_sheet.iter_rows(min_row=2, values_only=True))
+            assert {row[4] for row in submissions_sheet.iter_rows(min_row=2, values_only=True)} == {
+                "primero.c", "mismo-estudiante.c",
+            }
+            assert submissions_sheet["I2"].number_format == "0.00%"
+        finally:
+            workbook.close()
+
         concurrent_id = re.search(r'<option value="(\d+)">' + concurrent_lab + " ·", student_response.text)[1]
         with ThreadPoolExecutor(max_workers=2) as executor:
             tasks = [
@@ -217,6 +236,29 @@ def main():
         assert wait_result(second, "par-dos.c", 10000)["similarity_alert"]
         concurrent_report = admin.get("/admin/reports", params={"activity_id": concurrent_id, "language_id": c_id})
         assert len(PAIR_LINK.findall(assert_status(concurrent_report).text)) == 1
+
+        bulk_files = "/admin/submissions/lote"
+        scope = {"activity_id": concurrent_id, "language_id": c_id}
+        post(first, bulk_files, first_csrf, 403, action="zip", all_results="true", **scope)
+        archive = post(admin, bulk_files, admin_csrf, 200, action="zip", all_results="true", **scope)
+        assert 'filename="paridad-archivos.zip"' in archive.headers["content-disposition"]
+        with ZipFile(BytesIO(archive.content)) as files:
+            assert {name.split("/")[-1]: files.read(name) for name in files.namelist()} == {
+                "par-uno.c": STYLE_CODE.encode(), "par-dos.c": RENAMED_CODE.encode(),
+            }
+        archive = post(admin, bulk_files, admin_csrf, 200, action="zip", all_results="true",
+                       activity_id=separate_id, language_id=c_id)
+        with ZipFile(BytesIO(archive.content)) as files:
+            assert [name.split("/")[-1] for name in files.namelist()] == ["otra-actividad.c"]
+        preview = post(admin, bulk_files, admin_csrf, 200, action="delete", all_results="true", **scope)
+        token = re.search(r'name="token" value="([^"]+)"', preview.text)[1]
+        assert "2 archivos" in preview.text
+        upload(first, first_csrf, concurrent_id, c_id, "después.c", STYLE_CODE)
+        assert wait_result(first, "después.c", 10000)["similarity_alert"]
+        post(admin, bulk_files + "/eliminar", admin_csrf, token=token)
+        post(admin, bulk_files + "/eliminar", admin_csrf, 409, token=token)
+        assert not any(row["filename"] == "par-uno.c" for row in history(first))
+        assert wait_result(first, "después.c")["similarity_bp"] == 0
 
         post(admin, "/admin/settings", admin_csrf, similarity_threshold=100, ai_threshold=30)
         assert not wait_result(first, "primero.c", 10000)["similarity_alert"]
@@ -247,7 +289,30 @@ def main():
         assert_status(admin.get(pair_links[0]), 404)
         assert all(row["similarity_bp"] == 0 for row in history(first))
 
-    print("Flujo HTTP verificado: autorización, recálculo, ámbitos, fragmentos, crédito, límites, sesiones y manejo de cuentas.")
+        third_name = f"carla_{suffix}"
+        post(admin, "/admin/accounts", admin_csrf, username=third_name, display_name=third_name, password=student_pw)
+        account_page = assert_status(admin.get("/admin/accounts")).text
+        ids = [
+            re.search(r'<small>' + re.escape(name) + r'</small>\s*</span>\s*</summary>\s*'
+                      r'<form action="/admin/accounts/(\d+)"', account_page)[1]
+            for name in (first_name, third_name)
+        ]
+        bulk_accounts = "/admin/accounts/lote"
+        post(first, bulk_accounts, first_csrf, 403, action="disable", selection=ids)
+        post(admin, bulk_accounts, admin_csrf, action="disable", selection=ids)
+        assert_status(first.get("/api/student/submissions"), 401)
+        assert assert_status(admin.get("/admin/accounts")).text.count("Inhabilitada") >= 2
+        post(admin, bulk_accounts, admin_csrf, action="enable", selection=ids)
+        assert login(first, first_name, student_pw) == "/student"
+        preview = post(admin, bulk_accounts, admin_csrf, 200, action="delete", selection=ids)
+        assert "2 cuentas" in preview.text
+        token = re.search(r'name="token" value="([^"]+)"', preview.text)[1]
+        post(admin, bulk_accounts + "/eliminar", admin_csrf, token=token)
+        assert_status(first.get("/api/student/submissions"), 401)
+        for student_id in ids:
+            assert_status(admin.get(f"/admin/accounts/{student_id}/eliminar"), 404)
+
+    print("Flujo HTTP verificado: autorización, recálculo, ámbitos, fragmentos, crédito, límites, sesiones, manejo de cuentas, exportación y operaciones en lote.")
 
 
 if __name__ == "__main__":
