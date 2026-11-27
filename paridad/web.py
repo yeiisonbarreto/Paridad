@@ -67,7 +67,8 @@ class HTTPControls:
                 if not embedded:
                     headers["x-frame-options"] = "DENY"
                 headers["x-content-type-options"] = "nosniff"
-                headers["referrer-policy"] = "same-origin"
+                # Strip the token URL from the Referer without suppressing same-origin form Origin.
+                headers["referrer-policy"] = "strict-origin" if path == "/invitacion" else "same-origin"
                 headers["permissions-policy"] = "camera=(), microphone=(), geolocation=()"
                 headers["cache-control"] = "no-store"
                 if SECURE_COOKIES:

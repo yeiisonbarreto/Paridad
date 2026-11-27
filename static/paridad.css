@@ -111,3 +111,15 @@ code { font: 0.85rem/1.55 ui-monospace, "Cascadia Code", monospace; }
   .site-header nav { order: 1; width: 100%; }
   .shell { width: calc(100% - 1.25rem); }
 }
+
+.account-actions {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 0.6rem;
+  align-items: center;
+  margin-bottom: 0.9rem;
+}
+.button.danger { background: var(--alert-text); border-color: var(--alert-text); color: var(--paper); }
+.button.danger:hover { opacity: 0.9; }
+.button.secondary.danger { background: transparent; color: var(--alert-text); }
+.button.secondary.danger:hover { background: var(--alert-bg); }

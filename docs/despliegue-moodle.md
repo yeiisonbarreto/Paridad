@@ -22,6 +22,20 @@ curl --fail https://paridad.universidad.edu/healthz
 
 El perfil TLS publica HTTPS. Coordina la emisión y renovación de certificados con el servicio institucional. Tras renovar archivos dentro del directorio montado, recarga Nginx. Conserva `.env` con permisos restrictivos. El servicio de migraciones usa el propietario de PostgreSQL y prepara un rol de operación sin permisos para alterar el esquema ni administrar roles. La aplicación y el trabajador reciben únicamente la credencial del rol de operación.
 
+## Invitaciones por correo
+
+Con Paridad en HTTPS, configura un servidor SMTP que admita STARTTLS y al que pueda conectarse el contenedor de la aplicación. Usa la dirección institucional que tu servidor autoriza como remitente. Para servidores con autenticación, establece el usuario y la contraseña en el `.env` de la instalación.
+
+```dotenv
+PARIDAD_SMTP_HOST=smtp.tu-universidad.edu
+PARIDAD_SMTP_PORT=587
+PARIDAD_SMTP_FROM=notificaciones@tu-universidad.edu
+PARIDAD_SMTP_USERNAME=
+PARIDAD_SMTP_PASSWORD=
+```
+
+Recrea los servicios después de guardar el archivo. En **Cuentas**, guarda un correo válido para el estudiante y comprueba que su cuenta esté activa. Solo se envía un mensaje cuando el administrador pulsa **Enviar invitación por correo**. Los enlaces usan `PUBLIC_URL`, caducan en 24 horas y se invalidan al usar, reenviar, cambiar el correo, restablecer la contraseña desde administración o inhabilitar la cuenta.
+
 ## Moodle con sesión local
 
 | Modalidad | Configuración | Ventaja | Dependencia |

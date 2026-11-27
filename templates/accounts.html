@@ -3,32 +3,62 @@
 {% block title %}Cuentas · Paridad{% endblock %}
 {% block content %}
 <div class="page-heading"><h1>Cuentas de estudiantes</h1></div>
+{% if invitation_sent %}<p class="callout" role="status">Invitación enviada.</p>{% endif %}
 <div class="student-layout">
-  <section class="card">
-    <h2>Crear cuenta</h2>
-    <form action="/admin/accounts" method="post" class="stack">
-      {{ csrf(user) }}
-      <label>Usuario<input name="username" maxlength="64" minlength="3" required autocomplete="off"></label>
-      <label>Nombre completo<input name="display_name" maxlength="120" required></label>
-      <label>Contraseña asignada<input type="password" name="password" minlength="12" maxlength="128" required autocomplete="new-password"></label>
-      <button type="submit" class="button">Crear estudiante</button>
-    </form>
-  </section>
+  <div class="stack">
+    <section class="card">
+      <h2>Importar estudiantes</h2>
+      <p class="muted">Sube un archivo Excel con ID, Nombre y Correo. El ID será el usuario. Si el ID empieza por cero, guárdalo como texto.</p>
+      <p><a href="/admin/accounts/plantilla">Descargar plantilla Excel</a></p>
+      <form action="/admin/accounts/importar" method="post" enctype="multipart/form-data" class="stack">
+        {{ csrf(user) }}
+        <label>Lista de estudiantes
+          <input type="file" name="roster" accept=".xlsx" required aria-describedby="roster-help">
+        </label>
+        <p class="field-help" id="roster-help">Archivo .xlsx de hasta 128 KiB y {{ roster_limit }} filas de estudiantes.</p>
+        <button type="submit" class="button">Importar y descargar credenciales</button>
+        <p class="field-help">Guarda la descarga. Para ver las cuentas nuevas, recarga esta página.</p>
+      </form>
+    </section>
+    <section class="card">
+      <h2>Crear cuenta individual</h2>
+      <form action="/admin/accounts" method="post" class="stack">
+        {{ csrf(user) }}
+        <label>Usuario<input name="username" maxlength="64" required autocomplete="off"></label>
+        <label>Nombre completo<input name="display_name" maxlength="120" required></label>
+        <label>Correo electrónico <span class="muted">Opcional</span><input type="email" name="email" maxlength="254"></label>
+        <label>Contraseña asignada<input type="password" name="password" minlength="12" maxlength="128" required autocomplete="new-password"></label>
+        <button type="submit" class="button">Crear estudiante</button>
+      </form>
+    </section>
+  </div>
   <section class="card">
     <h2>Gestionar cuentas</h2>
-    <p class="muted">Desactivar una cuenta o restablecer su contraseña cierra sus sesiones abiertas.</p>
+    <p class="muted">Inhabilitar una cuenta o restablecer su contraseña cierra sus sesiones abiertas.</p>
+    {% if not mail_enabled %}<p class="muted">El envío de invitaciones requiere SMTP y una URL HTTPS de Paridad.</p>{% endif %}
     {% for student in students %}
     <details>
       <summary>{{ student.display_name }} <span class="muted">· {{ student.username }}</span>
-        {% if not student.active %}<span class="tag alert">Inactiva</span>{% endif %}
+        {% if not student.active %}<span class="tag alert">Inhabilitada</span>{% endif %}
       </summary>
       <form action="/admin/accounts/{{ student.id }}" method="post" class="stack record-form">
         {{ csrf(user) }}
+        <input type="hidden" name="edit_email" value="true">
         <label>Nombre completo<input name="display_name" value="{{ student.display_name }}" maxlength="120" required></label>
+        <label>Correo electrónico<input type="email" name="email" value="{{ student.email or '' }}" maxlength="254"></label>
         <label>Nueva contraseña<input type="password" name="new_password" minlength="12" maxlength="128" autocomplete="new-password"></label>
-        <label class="check"><input type="checkbox" name="active" value="true" {% if student.active %}checked{% endif %}> Cuenta activa</label>
+        <label class="check"><input type="checkbox" name="active" value="true" {% if student.active %}checked{% endif %}> Permitir iniciar sesión</label>
         <button type="submit" class="button">Guardar cuenta</button>
       </form>
+      <div class="account-actions">
+        {% if mail_enabled and student.active and student.email %}
+        <form action="/admin/accounts/{{ student.id }}/invitacion" method="post">
+          {{ csrf(user) }}
+          <button type="submit" class="button secondary">Enviar invitación por correo</button>
+        </form>
+        {% endif %}
+        <a href="/admin/accounts/{{ student.id }}/eliminar" class="button secondary danger">Eliminar cuenta</a>
+      </div>
     </details>
     {% else %}<p class="empty">No hay cuentas de estudiantes en esta página.</p>{% endfor %}
     {{ pagination('/admin/accounts', page, has_next) }}

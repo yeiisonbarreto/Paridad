@@ -8,9 +8,11 @@ import ssl
 import time
 from concurrent.futures import ThreadPoolExecutor
 from contextlib import ExitStack
+from io import BytesIO
 from uuid import uuid4
 
 import httpx
+from openpyxl import Workbook, load_workbook
 
 BASE = os.getenv("PARIDAD_TEST_URL", "http://localhost:8787").rstrip("/")
 CSRF = re.compile(r'name="csrf" value="([^"]+)"')
@@ -113,8 +115,22 @@ def main():
         assert "frame-ancestors 'none'" in assert_status(admin.get("/admin")).headers["content-security-policy"]
         assert "no-store" in assert_status(admin.get("/admin")).headers["cache-control"]
 
-        for account in (first_name, second_name):
-            post(admin, "/admin/accounts", admin_csrf, username=account, display_name=account, password=student_pw)
+        post(admin, "/admin/accounts", admin_csrf, username=first_name, display_name=first_name, password=student_pw)
+        roster = Workbook()
+        roster.active.append(("ID", "Nombre", "Correo"))
+        roster.active.append((second_name, second_name, f"{second_name}@example.edu"))
+        xlsx = BytesIO()
+        roster.save(xlsx)
+        roster.close()
+        imported = assert_status(admin.post("/admin/accounts/importar", data={"csrf": admin_csrf},
+                                           files={"roster": ("estudiantes.xlsx", xlsx.getvalue())}))
+        assert "paridad-credenciales.xlsx" in imported.headers["content-disposition"]
+        credentials = load_workbook(BytesIO(imported.content), read_only=True)
+        try:
+            assert credentials.active["A2"].value == second_name
+            second_pw = credentials.active["D2"].value
+        finally:
+            credentials.close()
         post(admin, "/admin/languages", admin_csrf, code=language_code, name=language_code,
              extensions=".txt", comments="c", keywords="int return if")
         activities_page = assert_status(admin.get("/admin/activities")).text
@@ -126,7 +142,7 @@ def main():
         post(admin, "/admin/settings", admin_csrf, similarity_threshold=40, ai_threshold=30)
 
         assert login(first, first_name, student_pw) == "/student"
-        assert login(second, second_name, student_pw) == "/student"
+        assert login(second, second_name, second_pw) == "/student"
         first_csrf, second_csrf = csrf(first, "/student"), csrf(second, "/student")
         student_response = assert_status(first.get("/student"))
         expected_ancestors = MOODLE_ORIGIN or "'none'"
@@ -217,7 +233,16 @@ def main():
              active="true", new_password=secrets.token_urlsafe(18))
         assert_status(second.get("/api/student/submissions"), 401)
 
-    print("Flujo HTTP verificado: autorización, recálculo, ámbitos, fragmentos, crédito, límites y sesiones.")
+        delete_path = f"/admin/accounts/{account_id}/eliminar"
+        assert_status(first.get(delete_path), 403)
+        assert_status(admin.get(delete_path))
+        post(admin, delete_path, admin_csrf, 400, confirmation="id-incorrecto")
+        post(admin, delete_path, admin_csrf, confirmation=second_name)
+        assert_status(admin.get(delete_path), 404)
+        assert_status(admin.get(pair_links[0]), 404)
+        assert all(row["similarity_bp"] == 0 for row in history(first))
+
+    print("Flujo HTTP verificado: autorización, recálculo, ámbitos, fragmentos, crédito, límites, sesiones y manejo de cuentas.")
 
 
 if __name__ == "__main__":

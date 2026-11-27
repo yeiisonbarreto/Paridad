@@ -47,8 +47,9 @@ erDiagram
 
 | Tabla | Campos y relaciones | Índices y reglas |
 |---|---|---|
-| `users` | ID, usuario, nombre, hash Argon2id, rol y estado | Usuario único, roles `ADMIN` y `STUDENT` |
+| `users` | ID, usuario, nombre, correo opcional, hash Argon2id, rol y estado | Usuario y correo únicos, roles `ADMIN` y `STUDENT` |
 | `sessions` | Hash SHA-256 del token aleatorio, usuario, CSRF y vencimiento | PK por hash, índices por usuario y vencimiento |
+| `student_invitations` | Una invitación por estudiante, hash del token y vencimiento | El token se elimina tras su uso, revocación o vencimiento |
 | `rate_limits` | Operación, IP o cuenta, inicio de ventana y contador | PK compuesta para el incremento atómico e índice de expiración |
 | `settings` | Fila única con los umbrales globales | Restricciones de 0 a 100 |
 | `languages` | Código, nombre, perfil, extensiones y opciones JSONB | Código único |
@@ -107,6 +108,9 @@ El total se multiplica por el mínimo entre 1, `tokens / 100` y `líneas de cód
 | `/api/student/submissions` | GET | Estudiante. Proyección tipada de su propio historial, sin registros de pares, identidades de terceros ni fuentes. |
 | `/admin`, `/admin/settings` | GET, POST respectivamente | Administrador. Panel y umbrales globales. |
 | `/admin/accounts`, `/admin/accounts/{id}` | GET/POST, POST respectivamente | Administrador. Alta, actualización, estado, rotación de contraseña y revocación de sesiones de estudiantes. |
+| `/admin/accounts/plantilla`, `/admin/accounts/importar` | GET, POST | Administrador. Plantilla e importación transaccional de Excel con descarga de contraseñas iniciales. |
+| `/admin/accounts/{id}/eliminar`, `/admin/accounts/{id}/invitacion` | GET/POST, POST | Administrador. Confirmación y borrado definitivo, o envío individual de una invitación. |
+| `/invitacion` | GET/POST | Estudiante con token válido. Configuración de contraseña con un enlace de un solo uso. |
 | `/admin/activities`, `/admin/activities/{id}`, `/admin/languages` | GET/POST, POST, POST | Administrador. Actividades, umbrales por actividad y perfiles configurables. |
 | `/admin/reports`, `/admin/reports/{izq}/{der}`, `/admin/submissions/{id}` | GET | Administrador. Comparaciones, fragmentos, fuentes y explicación del indicio. |
 | `/admin/submissions/{id}/retry` | POST | Administrador. Reintento manual tras un fallo de análisis. |

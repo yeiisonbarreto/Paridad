@@ -7,6 +7,7 @@ import secrets
 
 from argon2 import PasswordHasher, Type
 from argon2.exceptions import InvalidHashError, VerificationError
+from email_validator import EmailNotValidError, validate_email
 from fastapi import HTTPException, Request
 from starlette.responses import Response
 
@@ -14,13 +15,22 @@ from .config import (
     LOGIN_CSRF_COOKIE, SAME_SITE, SECURE_COOKIES, SESSION_COOKIE, SESSION_HOURS, TRUST_PROXY_IP,
 )
 
-USERNAME = re.compile(r"[a-z0-9][a-z0-9._-]{2,63}")
+USERNAME = re.compile(r"[a-z0-9][a-z0-9._-]{0,63}")
 PASSWORDS = PasswordHasher(type=Type.ID, time_cost=3, memory_cost=32768, parallelism=2)
 DUMMY_HASH = PASSWORDS.hash(secrets.token_hex(32))
 
 
 def normalized_username(value: str) -> str:
     return value.strip().lower()
+
+
+def normalized_email(value: str) -> str:
+    try:
+        return validate_email(
+            value.strip(), check_deliverability=False, allow_smtputf8=False,
+        ).ascii_email
+    except EmailNotValidError as exc:
+        raise ValueError("Escribe un correo electrónico válido.") from exc
 
 
 def valid_password(value: str) -> bool:

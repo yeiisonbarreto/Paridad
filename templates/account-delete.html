@@ -1,0 +1,20 @@
+{% extends "base.html" %}
+{% from "macros.html" import csrf %}
+{% block title %}Eliminar cuenta · Paridad{% endblock %}
+{% block content %}
+<section class="card narrow">
+  <h1>Eliminar cuenta</h1>
+  <p><strong>{{ student.display_name }}</strong> ({{ student.username }})</p>
+  <p>Se eliminarán de forma permanente la cuenta, {{ submission_count }} {{ 'entrega' if submission_count == 1 else 'entregas' }} y las comparaciones vinculadas. Paridad actualizará la similitud de las entregas afectadas.</p>
+  <form action="/admin/accounts/{{ student.id }}/eliminar" method="post" class="stack">
+    {{ csrf(user) }}
+    <label>Escribe <strong>{{ student.username }}</strong> para confirmar
+      <input name="confirmation" required maxlength="64" autocomplete="off">
+    </label>
+    <div class="account-actions">
+      <button type="submit" class="button danger">Eliminar definitivamente</button>
+      <a href="/admin/accounts" class="button secondary">Cancelar</a>
+    </div>
+  </form>
+</section>
+{% endblock %}

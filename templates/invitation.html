@@ -1,0 +1,15 @@
+{% extends "base.html" %}
+{% block title %}Crear contraseña · Paridad{% endblock %}
+{% block content %}
+<section class="card narrow">
+  <h1>Crea tu contraseña</h1>
+  <p>Tu usuario es <strong>{{ username }}</strong>.</p>
+  {% if error %}<p class="callout alert" role="alert">{{ error }}</p>{% endif %}
+  <form action="/invitacion" method="post" class="stack">
+    <input type="hidden" name="token" value="{{ token }}">
+    <label>Contraseña<input type="password" name="password" minlength="12" maxlength="128" autocomplete="new-password" required></label>
+    <label>Repite la contraseña<input type="password" name="confirmation" minlength="12" maxlength="128" autocomplete="new-password" required></label>
+    <button type="submit" class="button">Guardar contraseña</button>
+  </form>
+</section>
+{% endblock %}

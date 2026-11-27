@@ -31,6 +31,20 @@ docker compose down
 
 El volumen `pgdata` conserva los datos al detener el proyecto. La aplicación y PostgreSQL se comunican por una red interna. El perfil TLS publica únicamente Nginx.
 
+## Actualizar una instalación
+
+Actualiza el código en la misma carpeta donde ya ejecutas Paridad y conserva su archivo `.env`. Después ejecuta `docker compose --env-file .env up -d --build --wait` desde esa carpeta. El servicio de migraciones aplicará el nuevo esquema sobre el volumen existente.
+
+## Gestionar estudiantes
+
+Desde **Cuentas** puedes crear cuentas individuales, editar el correo y restablecer contraseñas. Para inhabilitar una cuenta, desmarca **Permitir iniciar sesión** y guarda el cambio. Paridad cierra las sesiones de la cuenta inhabilitada. La eliminación requiere escribir el ID y borra la cuenta, sus entregas y las comparaciones asociadas. El historial del resto de estudiantes refleja el nuevo máximo de similitud.
+
+Para importar, descarga la plantilla en **Cuentas → Importar estudiantes**. Completa las columnas `ID`, `Nombre` y `Correo` en la primera hoja y sube el archivo `.xlsx`. Puedes importar hasta 200 filas y 128 KiB por archivo. Guarda los IDs con ceros iniciales como texto. Si un ID o correo está repetido o hay una fila inválida, se rechaza el archivo completo y se indica la fila.
+
+Tras importar, guarda `paridad-credenciales.xlsx`. Contiene el ID que se usa para iniciar sesión y una contraseña inicial aleatoria distinta por estudiante. El archivo se entrega al importar. PostgreSQL guarda los hashes y el administrador puede restablecer contraseñas desde **Cuentas**. Recarga la página para ver las cuentas nuevas.
+
+Para que un estudiante elija su propia contraseña, configura el envío SMTP descrito en [Despliegue y Moodle](docs/despliegue-moodle.md) y pulsa **Enviar invitación por correo** desde su cuenta. El estudiante recibe un enlace de un solo uso, válido durante 24 horas. Puede abrirlo y elegir su contraseña. Volver a enviar la invitación reemplaza el enlace anterior.
+
 ## Estructura
 
 ```text

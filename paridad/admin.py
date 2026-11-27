@@ -10,7 +10,7 @@ from psycopg import errors
 from psycopg.types.json import Jsonb
 
 from .analysis import COMMENT_STYLES
-from .security import PASSWORDS, USERNAME, auth_user, check_csrf, normalized_username, valid_password
+from .security import auth_user, check_csrf
 from .web import redirect, view
 
 router = APIRouter(prefix="/admin")
@@ -78,69 +78,6 @@ def settings(request: Request, csrf: Csrf, similarity_threshold: Threshold, ai_t
             (similarity_threshold, ai_threshold),
         )
     return redirect("/admin")
-
-
-@router.get("/accounts")
-def accounts(request: Request, page: Page = 1):
-    with request.app.state.pool.connection() as conn:
-        user = administrator(conn, request)
-        students = conn.execute(
-            """SELECT id, username, display_name, active FROM users WHERE role = 'STUDENT'
-               ORDER BY username LIMIT %s OFFSET %s""",
-            (PAGE_SIZE + 1, (page - 1) * PAGE_SIZE),
-        ).fetchall()
-    return view(
-        request, "accounts.html", user=user, students=students[:PAGE_SIZE],
-        page=page, has_next=len(students) > PAGE_SIZE,
-    )
-
-
-@router.post("/accounts")
-def create_account(
-    request: Request, csrf: Csrf, username: Annotated[str, Form(max_length=64)],
-    display_name: Name, password: Annotated[str, Form(max_length=128)],
-):
-    try:
-        with request.app.state.pool.connection() as conn:
-            administrator(conn, request, csrf)
-            username = normalized_username(username)
-            if not USERNAME.fullmatch(username) or not valid_password(password):
-                raise HTTPException(400, "El usuario o la contraseña no cumple el formato. Usa al menos 12 caracteres de contraseña.")
-            conn.execute(
-                """INSERT INTO users (username, display_name, password_hash, role)
-                   VALUES (%s, %s, %s, 'STUDENT')""",
-                (username, required_text(display_name), PASSWORDS.hash(password)),
-            )
-    except errors.UniqueViolation:
-        raise HTTPException(409, "Ese usuario ya existe.") from None
-    return redirect("/admin/accounts")
-
-
-@router.post("/accounts/{student_id}")
-def update_account(
-    request: Request, student_id: int, csrf: Csrf, display_name: Name,
-    active: Annotated[bool, Form()] = False,
-    new_password: Annotated[str, Form(max_length=128)] = "",
-):
-    with request.app.state.pool.connection() as conn:
-        administrator(conn, request, csrf)
-        if not 0 < student_id < 2**63:
-            raise HTTPException(404, "Cuenta no encontrada.")
-        next_hash = None
-        if new_password:
-            if not valid_password(new_password):
-                raise HTTPException(400, "La contraseña debe tener al menos 12 caracteres.")
-            next_hash = PASSWORDS.hash(new_password)
-        changed = conn.execute(
-            """UPDATE users SET display_name = %s, active = %s, password_hash = COALESCE(%s, password_hash)
-               WHERE id = %s AND role = 'STUDENT' RETURNING id""",
-            (required_text(display_name), active, next_hash, student_id),
-        ).fetchone()
-        if not changed:
-            raise HTTPException(404, "Cuenta no encontrada.")
-        if not active or next_hash:
-            conn.execute("DELETE FROM sessions WHERE user_id = %s", (student_id,))
-    return redirect("/admin/accounts")
 
 
 @router.get("/activities")
