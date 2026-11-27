@@ -25,6 +25,14 @@
   {% endif %}
 {% endmacro %}
 
+{% macro paridad_mark(image_class, wordmark_class='') %}
+  {% if paridad_logo_available %}
+  <img class="{{ image_class }}" src="/static/paridad-logo.png" alt="Paridad" decoding="async">
+  {% else %}
+  <span{% if wordmark_class %} class="{{ wordmark_class }}"{% endif %}>Paridad</span>
+  {% endif %}
+{% endmacro %}
+
 {% macro school_logo(class_name) %}
   <img class="{{ class_name }}" src="/static/escuela-colombiana-logo.png"
        width="1174" height="600" alt="Escuela Colombiana de Ingeniería Julio Garavito, Universidad"

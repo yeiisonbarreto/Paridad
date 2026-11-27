@@ -288,7 +288,7 @@ def send_review_notices(
             return view(request, "notices-confirm.html", user=user, total=len(students),
                         destination=destination, selection=ids or [], all_results=all_results,
                         activity_id=activity_id, language_id=language_id, alerts_only=alerts_only)
-        published = publish_manual(conn, students)
+        published = publish_manual(conn, [row["id"] for row in rows])
     skipped = len(students) - published
     if wants_json(request):
         return JSONResponse({"published": published, "skipped": skipped})

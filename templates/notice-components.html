@@ -1,18 +1,64 @@
+{% from "macros.html" import paridad_mark %}
+
 {% macro notice_title(notice) %}{{ 'Revisa esta entrega' if notice.submission_id else 'Revisa tus entregas' }}{% endmacro %}
 
+{% macro activity_label(delivery) -%}
+  {{ delivery.activity }}{% if delivery.activity_code != delivery.activity %} ({{ delivery.activity_code }}){% endif %}
+{%- endmacro %}
+
 {% macro notice_content(notice, heading_id) %}
-<h2 id="{{ heading_id }}" tabindex="-1">{{ notice_title(notice) }}</h2>
-<time class="table-detail">{{ notice.created_at|date_label }}</time>
+<div class="notice-identity">{{ paridad_mark('notice-logo', 'notice-wordmark') }}</div>
+<div class="notice-detail-header">
+  <h2 id="{{ heading_id }}" tabindex="-1">{{ notice_title(notice) }}</h2>
+  <p class="notice-byline">
+    <span>{{ 'Aviso automático' if notice.submission_id else 'Aviso docente' }}</span>
+    <time datetime="{{ notice.created_at.isoformat() }}">{{ notice.created_at|date_label }}</time>
+  </p>
+</div>
 {% if notice.submission_id %}
-  <p class="table-detail">{{ notice.filename }} · {{ notice.activity }}</p>
-  {% if notice.similarity and notice.ai %}
-  <p>La similitud y el indicio de IA sin declarar superaron sus umbrales de revisión.</p>
-  {% elif notice.similarity %}
-  <p>La similitud superó el umbral de revisión.</p>
-  {% else %}
-  <p>El indicio de IA sin declarar superó el umbral de revisión.</p>
-  {% endif %}
+  <dl class="notice-delivery-fields">
+    <div><dt>Archivo</dt><dd>{{ notice.filename }}</dd></div>
+    <div><dt>Actividad</dt><dd>{{ activity_label(notice) }}</dd></div>
+    <div><dt>Lenguaje</dt><dd>{{ notice.language }}</dd></div>
+  </dl>
+  <section class="notice-detail-section">
+    <h3>Motivo del aviso</h3>
+    {% if notice.similarity and notice.ai %}
+    <p>La similitud y el indicio de IA sin declarar superaron sus umbrales de revisión.</p>
+    {% elif notice.similarity %}
+    <p>La similitud superó el umbral de revisión.</p>
+    {% else %}
+    <p>El indicio de IA sin declarar superó el umbral de revisión.</p>
+    {% endif %}
+    {% if notice.similarity_at_notice_bp is not none or notice.ai_at_notice_bp is not none %}
+    <dl class="notice-metrics">
+      {% if notice.similarity_at_notice_bp is not none %}
+      <div><dt>Similitud máxima</dt><dd>{{ notice.similarity_at_notice_bp|percent }}
+        <span>Umbral {{ notice.similarity_threshold_at_notice }} %</span></dd></div>
+      {% endif %}
+      {% if notice.ai_at_notice_bp is not none %}
+      <div><dt>Indicio de IA</dt><dd>{{ notice.ai_at_notice_bp|percent }}
+        <span>Umbral {{ notice.ai_threshold_at_notice }} %</span></dd></div>
+      {% endif %}
+    </dl>
+    {% endif %}
+    <p class="muted">El resultado requiere revisión del equipo docente.</p>
+  </section>
 {% else %}
-  <p>El equipo docente te invita a revisar el resultado de tus entregas.</p>
+  <section class="notice-detail-section">
+    <p>El equipo docente te invita a revisar el resultado de tus entregas.</p>
+    {% if notice.related_deliveries %}
+    <h3>Entregas por revisar</h3>
+    <ul class="notice-deliveries">
+      {% for delivery in notice.related_deliveries %}
+      <li><span>{{ delivery.filename }}</span><span class="table-detail">{{ activity_label(delivery) }} · {{ delivery.language }}</span></li>
+      {% endfor %}
+    </ul>
+    {% endif %}
+  </section>
 {% endif %}
+<section class="notice-detail-section notice-next">
+  <h3>Qué puedes hacer</h3>
+  <p>Consulta el análisis en Mis entregas. Si tienes dudas sobre la nota, puedes pedir una aclaración desde su detalle.</p>
+</section>
 {% endmacro %}

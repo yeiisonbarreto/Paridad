@@ -20,7 +20,13 @@
         <button type="submit" class="notice-row" aria-haspopup="dialog">
           <span class="notice-row-details">
             <span class="notice-heading">{{ notice_title(notice) }}{% if not notice.read_at %}<span class="tag pending" data-notice-new>Nuevo</span>{% endif %}</span>
-            {% if notice.submission_id %}<span class="table-detail">{{ notice.filename }} · {{ notice.activity }}</span>{% endif %}
+            {% if notice.submission_id %}
+            <span class="table-detail">{{ notice.filename }} · {{ notice.activity }}</span>
+            {% elif notice.related_deliveries and notice.related_deliveries|length == 1 %}
+            <span class="table-detail">{{ notice.related_deliveries[0].filename }} · {{ notice.related_deliveries[0].activity }}</span>
+            {% elif notice.related_deliveries %}
+            <span class="table-detail">{{ notice.related_deliveries|length }} entregas</span>
+            {% endif %}
           </span>
           <time class="table-detail">{{ notice.created_at|date_label }}</time>
         </button>
@@ -34,7 +40,7 @@
   {% endif %}
   {{ pagination('/student/avisos', page, has_next) }}
 </section>
-<dialog class="notice-dialog" id="student-notice-dialog" aria-labelledby="student-notice-title">
+<dialog class="notice-dialog notice-dialog-student" id="student-notice-dialog" aria-labelledby="student-notice-title">
   <div class="notice-dialog-inner">
     <form method="dialog" class="notice-dialog-dismiss">
       <button type="submit" class="notice-close" aria-label="Cerrar aviso">×</button>

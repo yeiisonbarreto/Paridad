@@ -1,4 +1,4 @@
-{% from "macros.html" import school_logo %}
+{% from "macros.html" import paridad_mark, school_logo %}
 <!doctype html>
 <html lang="es">
 <head>
@@ -16,12 +16,10 @@
 </head>
 <body class="{% block body_class %}{% endblock %}">
   <a class="skip-link" href="#main">Saltar al contenido</a>
+  {% block header %}
   <header class="site-header">
     <div class="shell header-row">
-      <a class="brand" href="/">
-        {% if paridad_logo_available %}<img class="paridad-logo" src="/static/paridad-logo.png" alt="Paridad">
-        {% else %}Paridad{% endif %}
-      </a>
+      <a class="brand" href="/">{{ paridad_mark('paridad-logo') }}</a>
       {% if user and user.role == 'ADMIN' %}
       {% set current = "Panel" %}
       {% if request.url.path.startswith('/admin/accounts') %}{% set current = "Cuentas" %}
@@ -66,6 +64,7 @@
       {% endif %}
     </div>
   </header>
+  {% endblock %}
   <main class="shell content" id="main">{% block content %}{% endblock %}</main>
   {% if user and user.role == 'ADMIN' and request.url.path in ['/admin/reports', '/admin/submissions'] %}
   <dialog class="notice-dialog" id="send-notice-dialog" aria-labelledby="send-notice-title">

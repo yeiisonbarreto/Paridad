@@ -173,7 +173,9 @@ def main():
         row = wait_result(first, "primero.c")
         assert row["similarity_bp"] == 0 and not row["similarity_alert"]
         assert row["ai_bp"] > 3000 and row["ai_alert"]
-        assert "indicio de IA" in wait_notice(first, "primero.c")
+        ai_notice = wait_notice(first, "primero.c")
+        assert "indicio de IA" in ai_notice and "Umbral 30 %" in ai_notice
+        assert "Buenas prácticas" not in ai_notice
         assert_status(admin.get("/student/avisos"), 403)
         upload(first, first_csrf, activity_id, c_id, "primero.c", STYLE_CODE, request_id=nonce)
         upload(first, first_csrf, activity_id, c_id, "mismo-estudiante.c", STYLE_CODE)
@@ -247,6 +249,12 @@ def main():
         inbox_second = wait_notice(second, "compania.c")
         assert "compania.c" not in inbox_first and "primero.c" not in inbox_second
         assert second_name not in inbox_first and first_name not in inbox_second
+        assert "100,00 %" in inbox_first and "Umbral 40 %" in inbox_first
+        assert "Umbral 40 %" in inbox_second and "Qué puedes hacer" in inbox_second
+        post(admin, "/admin/settings", admin_csrf, similarity_threshold=70, ai_threshold=60)
+        after_change = assert_status(first.get("/student/avisos")).text
+        assert "Umbral 40 %" in after_change and "Umbral 30 %" in after_change
+        post(admin, "/admin/settings", admin_csrf, similarity_threshold=40, ai_threshold=30)
         notice_id = re.search(r'name="notice_id" value="([^"]+)"', inbox_first)[1]
         read_path = "/student/avisos/leer"
         post(second, read_path, second_csrf, 404, notice_id=notice_id)
@@ -277,6 +285,10 @@ def main():
         private_ids = re.findall(r'name="notice_id" value="([^"]+)"', assert_status(first.get("/student/avisos")).text)
         opened = post(first, read_path, first_csrf, 200, notice_id=private_ids[0], abrir="true")
         assert "El equipo docente te invita" in opened.text
+        assert "Entregas por revisar" in opened.text
+        assert "primero.c" in opened.text and "mismo-estudiante.c" in opened.text
+        assert "compania.c" not in opened.text and second_name not in opened.text
+        assert "mismo-estudiante.c" not in assert_status(second.get("/student/avisos")).text
         for private_id in private_ids[1:]:
             post(first, read_path, first_csrf, notice_id=private_id)
         read_inbox = assert_status(first.get("/student/avisos")).text

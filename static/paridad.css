@@ -126,12 +126,16 @@ img { display: block; max-inline-size: 100%; height: auto; }
 .footer-logo { width: 9.25rem; margin-inline-start: -0.9rem; }
 
 .login-page .content { display: grid; align-content: center; }
+.login-wordmark {
+  margin: 0 0 0.9rem; text-align: center; color: var(--brand-dark); font-size: clamp(2.5rem, 7vw, 3.4rem);
+  font-weight: 660; letter-spacing: -0.06em; line-height: 1.05;
+}
 .login-form {
   width: min(100%, 27rem);
   margin-inline: auto;
   padding: clamp(1.4rem, 5vw, 2.4rem);
 }
-.login-form h1 { font-size: clamp(1.6rem, 4vw, 2rem); }
+.login-form h1 { font-size: clamp(1.6rem, 4vw, 2rem); text-align: center; }
 .login-form form { margin-top: 1.65rem; }
 .login-form .button { width: 100%; margin-top: 0.35rem; }
 
@@ -451,7 +455,46 @@ code { font: 0.85rem/1.55 ui-monospace, "Cascadia Code", monospace; }
   color: var(--muted); cursor: pointer; font-size: 1.4rem; line-height: 1;
 }
 .notice-close:hover { background: var(--panel); color: var(--ink); }
-[data-notice-content] h2 { padding-inline-end: 1.6rem; }
+.notice-dialog-student { width: min(34rem, 100% - 2rem); }
+.notice-identity {
+  padding: 0 2.5rem 0.8rem 0; margin-block-end: 1rem; border-block-end: 1px solid var(--line);
+}
+.notice-logo {
+  width: min(100%, 11.5rem); max-block-size: 4rem; object-fit: contain; object-position: left center;
+}
+.notice-wordmark {
+  color: var(--brand-dark); font-size: 1.65rem; font-weight: 660; letter-spacing: -0.055em; line-height: 1.15;
+}
+.notice-detail-header h2 { margin: 0 0 0.35rem; font-size: 1.36rem; }
+.notice-byline {
+  display: flex; flex-wrap: wrap; gap: 0.3rem 0.7rem; margin: 0;
+  font-size: 0.84rem; color: var(--muted);
+}
+.notice-delivery-fields, .notice-metrics {
+  display: grid; grid-template-columns: repeat(auto-fit, minmax(min(100%, 7rem), 1fr));
+  gap: 0.55rem 0.75rem; margin: 0;
+}
+.notice-delivery-fields {
+  margin-block-start: 0.95rem; padding: 0.7rem; border-radius: 0.55rem; background: var(--panel);
+}
+.notice-delivery-fields dt, .notice-metrics dt { color: var(--muted); font-size: 0.82rem; }
+.notice-delivery-fields dd, .notice-metrics dd { margin: 0; overflow-wrap: anywhere; }
+.notice-detail-section { margin-block-start: 0.95rem; }
+.notice-detail-section h3 { margin: 0 0 0.28rem; font-size: 0.93rem; }
+.notice-detail-section p { margin: 0 0 0.6rem; }
+.notice-detail-section p:last-child { margin-block-end: 0; }
+.notice-metrics { margin-block-end: 0.65rem; }
+.notice-metrics > div { padding: 0.53rem 0.65rem; border: 1px solid var(--line); border-radius: 0.45rem; }
+.notice-metrics dd { font-size: 1.08rem; font-variant-numeric: tabular-nums; }
+.notice-metrics dd span { display: block; color: var(--muted); font-size: 0.82rem; }
+.notice-deliveries { margin: 0.28rem 0 0; padding-inline-start: 1.1rem; overflow-wrap: anywhere; }
+.notice-deliveries li + li { margin-block-start: 0.3rem; }
+.notice-next { padding-block-start: 0.8rem; border-block-start: 1px solid var(--line); }
+@media (max-width: 30rem) {
+  .notice-delivery-fields { grid-template-columns: 1fr; gap: 0.3rem; }
+  .notice-delivery-fields > div { display: grid; grid-template-columns: 5rem minmax(0, 1fr); gap: 0.35rem; }
+  .notice-delivery-fields dt { padding-block-start: 0.08rem; }
+}
 .notice-toast {
   position: fixed; z-index: 20; inset-inline-end: 1rem; inset-block-end: 1rem;
   max-width: min(27rem, 100% - 2rem); padding: 0.85rem 1rem; border: 1px solid var(--line);
